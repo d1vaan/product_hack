@@ -1,0 +1,72 @@
+{
+  "as_of": "2026-08-31",
+  "model_version": "file-stub-v0.1",
+  "generated_by": "tools/gen_data.py",
+  "signals": [
+    {
+      "date": "2026-03-12",
+      "corridor": "RUB_UZS",
+      "indicator": "momentum_down",
+      "direction": "favorable",
+      "speed": "slow",
+      "strength": 0.78,
+      "scenario_code": "MOMENTUM_DOWN",
+      "facts": {
+        "percentile": 12,
+        "window_days": 90,
+        "streak_days": 4,
+        "change_bp": -160,
+        "rate": 0.000771
+      }
+    },
+    {
+      "date": "2026-06-15",
+      "corridor": "RUB_TJS",
+      "indicator": "level_p10",
+      "direction": "favorable",
+      "speed": "slow",
+      "strength": 0.82,
+      "scenario_code": "LEVEL_LOW",
+      "facts": {
+        "percentile": 12,
+        "window_days": 90,
+        "streak_days": 4,
+        "change_bp": -145,
+        "rate": 0.10932
+      }
+    },
+    {
+      "date": "2026-04-22",
+      "corridor": "RUB_UZS",
+      "indicator": "reversal_up",
+      "direction": "closing",
+      "speed": "fast",
+      "strength": 0.71,
+      "scenario_code": "REVERSAL_UP",
+      "facts": {
+        "percentile": 9,
+        "window_days": 90,
+        "streak_days": 2,
+        "change_bp": 110,
+        "rate": 0.000779
+      }
+    },
+    {
+      "date": "2025-12-10",
+      "corridor": "RUB_KGS",
+      "indicator": "seasonal",
+      "direction": "favorable",
+      "speed": "slow",
+      "strength": 0.55,
+      "scenario_code": "SEASONAL",
+      "facts": {
+        "percentile": 52,
+        "window_days": 90,
+        "streak_days": 0,
+        "change_bp": 12,
+        "season": "december",
+        "rate": 0.975572
+      }
+    }
+  ]
+}
