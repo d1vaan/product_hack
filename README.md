@@ -162,6 +162,19 @@ docker compose -f docker-compose.yml -f docker-compose.ml.yml --profile ml up --
 
 Подробности — `ml/README.md`.
 
+## Тесты
+
+```bash
+docker build -f tests/Dockerfile -t stand-tests .
+docker run --rm -v "$PWD:/w" stand-tests
+```
+
+32 теста: `ml/common` (маппинг ML→стенд, подготовка курсов, том артефактов),
+интеграция стенда (курсы из парсера + откат на файл, `/api/health` со статусами
+трёх ML-сервисов, проксирование `/api/ml/*`), резолв всех сценариев на текущих
+`data/*`. ML-сервисы замоканы (`respx`), профиль `ml` не нужен. Тесты кода
+ML-команды — `ml/upstream/tests` (14 шт., см. `tests/README.md`).
+
 ---
 
 ## Деплой на VPS
