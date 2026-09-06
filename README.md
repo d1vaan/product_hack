@@ -25,6 +25,74 @@
 
 ---
 
+## Структура проекта
+
+```
+demo-stand/
+├── docker-compose.yml            базовый стек: proxy + web + api
+├── docker-compose.ml.yml         оверлей: parser + moment-model + push-model + ml-warmup (профиль ml)
+├── Caddyfile                     reverse-proxy :80/:443, здесь же меняется домен для TLS
+├── .env.example                  все параметры стенда с дефолтами → cp .env.example .env
+├── .gitmodules                   ml/upstream → репозиторий ML-команды (зафиксирован)
+│
+├── api/                          бэкенд (FastAPI, без БД)
+│   ├── main.py                   приложение, ~22 ручки /api/*, /api/health, passthrough /api/ml/*
+│   ├── config.py                 параметры из окружения
+│   ├── data_access.py            чтение data/*, метаданные коридоров, помощники по ряду курсов
+│   ├── signals.py                источник сигналов: файл data/signals.json или HTTP-модель (ML_URL)
+│   ├── evaluate.py               ядро: правила состояний экрана (OK/DRIFT/BETTER/NEUTRAL)
+│   ├── texts.py                  подстановка facts в шаблоны data/texts.json
+│   ├── reserve.py                «дождаться выгодного курса»: машина состояний, ленивая переоценка
+│   ├── policy.py                 коммуникационная политика: бюджет, cooldown, тихие часы
+│   ├── events.py                 лог событий → logs/events.jsonl
+│   ├── selftest.py               прогон инвариантов без HTTP (python -m api.selftest)
+│   └── Dockerfile
+│
+├── web/                          фронтенд (React + Vite + Tailwind)
+│   ├── src/
+│   │   ├── App.tsx               оркестрация: вкладки «Песочница» / «Сценарии», экраны, вызовы api
+│   │   ├── Launcher.tsx          список 7 сценариев
+│   │   ├── api.ts store.ts types.ts   REST-клиент, query-состояние + форматтеры, типы
+│   │   ├── components/
+│   │   │   ├── Chrome.tsx        TopTabs + SandboxBar (параметры песочницы) + ScenarioBar
+│   │   │   ├── Shell.tsx         PhoneFrame — рамка телефона со статус-баром
+│   │   │   ├── Plaque.tsx        плашка сигнала (4 состояния, одинаковая заливка)
+│   │   │   ├── PushToast.tsx     системное уведомление сверху экрана
+│   │   │   └── ui.tsx            кнопки, поля, чипы
+│   │   └── screens/              Home · Transfer · Settings · Reserve (R1–R5) · RecipientLimit
+│   ├── tailwind.config.js        дизайн-токены (цвета, радиусы, тени)
+│   ├── nginx.conf  vite.config.ts
+│   └── Dockerfile                multi-stage: сборка Vite → раздача nginx
+│
+├── ml/                          рабочие ML-сервисы (см. ml/README.md)
+│   ├── upstream/                 git submodule → AI_Product_Hack_trigger_model (НЕ модифицируется)
+│   ├── common/                   тонкие обёртки: pipeline.py · contract.py · artifacts.py
+│   ├── parser/ moment_model/ push_model/    FastAPI-сервисы (app.py + Dockerfile)
+│   ├── warmup/run_warmup.py      одноразовый прогон конвейера → том ml_data
+│   └── fallback/cbr_rates.csv    офлайн-снапшот курсов ЦБ
+│
+├── data/                         входные данные стенда (без БД)
+│   ├── rates.csv                 дневной ряд курсов по 5 коридорам
+│   ├── signals.json              предпосчитанный ответ модели (facts + scenario_code)
+│   ├── scenarios.json            7 сценариев (S1–S7)
+│   ├── personas.json             5 портретов получателей
+│   └── texts.json                утверждённые формулировки push / plaque / forbidden
+│
+├── tests/                        pytest в Docker (см. tests/README.md)
+│   ├── Dockerfile  conftest.py
+│   └── test_*.py                 ml/common + интеграция стенда + резолв сценариев (32 теста)
+│
+├── tools/                        офлайн-скрипты
+│   ├── gen_data.py               детерминированный синтетический ряд + сигналы
+│   ├── prepare_rates.py          реальная выгрузка ЦБ РФ в rates.csv
+│   └── simulate_users.py         Монте-Карло прогон профилей → simulation-stats.*
+│
+├── logs/events.jsonl             append-лог событий стенда (создаётся в рантайме)
+└── simulation-stats.md / .json   результаты последнего прогона моделирования
+```
+
+---
+
 ## Архитектура
 
 ```
@@ -75,8 +143,8 @@
 
 ### Жизненный цикл запроса (экран перевода)
 
-1. Фронт открывает сценарий → `POST /api/evaluate` с `{corridor, sim_date,
-   sim_minutes, entry: PUSH|SELF, push_rate, amount_rub, …}`.
+1. Фронт открывает сессию (песочница или сценарий) → `POST /api/evaluate` с
+   `{corridor, sim_date, sim_minutes, entry: PUSH|SELF, push_rate, amount_rub, …}`.
 2. `evaluate.py`: берёт курс на дату (`data_access.rate_on`), считает
    `delta_bp` между курсом пуша и текущим, определяет состояние
    `OK / DRIFT / BETTER / NEUTRAL` (порог `DRIFT_THRESHOLD_BP`, TTL пуша
@@ -88,37 +156,12 @@
 5. Ответ: `{state, plaque, push_text, current_rate, recipient_gets,
    percentile_now, actions, …}`. Вывод «что это значит» делает клиент.
 
-### Бэкенд: модули (`api/`)
-
-| Файл | Ответственность |
-|---|---|
-| `main.py` | FastAPI-приложение, 22 ручки `/api/*`, `/api/health` с probe трёх ML-сервисов, passthrough `/api/ml/*` |
-| `config.py` | все параметры из env, значения по умолчанию = `.env.example` |
-| `data_access.py` | чтение `data/*`, метаданные коридоров (падежи валют), помощники по ряду (`rate_on`, `window_values`, `percentile_rank`, `next_trading_day`) |
-| `signals.py` | источник сигналов: файл `data/signals.json` или HTTP по `ML_URL` с откатом; трекает активный источник для `/api/health` |
-| `evaluate.py` | ядро: правила состояний экрана, суммы у получателя, сборка плашки |
-| `texts.py` | подстановка `facts` → шаблоны `texts.json`, запрет генерации в рантайме |
-| `reserve.py` | «дождаться выгодного курса»: машина состояний `ACTIVE → EXECUTED / CANCELLED / EXPIRED / SUPERSEDED`, ленивая переоценка при чтении, TTL 7 дней |
-| `policy.py` | коммуникационная политика: месячный бюджет, cooldown, тихие часы; каждый подавленный сигнал получает причину (сценарий S6) |
-| `events.py` | лог событий: in-memory `deque` + append `logs/events.jsonl`, whitelist типов, без ПДн |
-| `selftest.py` | прогон инвариантов без HTTP: `python -m api.selftest` |
-
-### Фронтенд: структура (`web/src/`)
-
-| Модуль | Что |
-|---|---|
-| `App.tsx` | оркестрация: вкладки `sandbox` / `scenarios`, параметры песочницы, экраны, вызовы `api`, deep-link |
-| `components/Chrome.tsx` | `TopTabs` (Песочница ⇄ Сценарии) + `SandboxBar` (параметры сессии) + `ScenarioBar` |
-| `Launcher.tsx` | список 7 сценариев (вкладка «Сценарии») |
-| `components/Shell.tsx` | `PhoneFrame` — рамка телефона со статус-баром |
-| `components/Plaque.tsx` | плашка сигнала — один компонент, 4 состояния, одинаковая заливка |
-| `components/PushToast.tsx` | системное уведомление, съезжает сверху экрана телефона |
-| `components/ui.tsx` | примитивы: кнопки во всю ширину, поля, чипы |
-| `screens/*` | `Home`, `Transfer` (перевод/подтверждение/успех), `Settings`, `Reserve` (R1–R5), `RecipientLimit` |
-| `api.ts` · `store.ts` · `types.ts` | клиент REST, query-состояние + форматтеры, типы |
-
-Дизайн-токены (цвета, радиусы, тени) — `web/tailwind.config.js`, сняты со
-скриншотов веб-приложения. Обводок нет нигде — только заливки и отступы.
+Назначение каждого модуля `api/` и `web/src/` — в разделе
+[«Структура проекта»](#структура-проекта) выше. Ключевые помощники по ряду
+курсов в `data_access.py`: `rate_on`, `window_values`, `percentile_rank`,
+`next_trading_day`. Дизайн-токены фронтенда (цвета, радиусы, тени) —
+`web/tailwind.config.js`, сняты со скриншотов веб-приложения; обводок нет
+нигде, только заливки и отступы.
 
 ---
 
