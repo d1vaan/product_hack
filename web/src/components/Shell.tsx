@@ -18,12 +18,12 @@ export function StandHeader({
     ["data", "Данные"],
   ];
   return (
-    <div className="flex items-center justify-between gap-4 bg-[#15161A] px-4 py-2 text-white">
-      <div className="flex items-center gap-3">
-        <span className="text-[12px] uppercase tracking-wide text-white/50">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 overflow-hidden bg-[#15161A] px-4 py-2 text-white">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="hidden truncate text-[12px] uppercase tracking-wide text-white/50 sm:inline">
           Демо-стенд · триггерный слой переводов
         </span>
-        <div className="flex gap-1 rounded-full bg-white/10 p-0.5">
+        <div className="flex shrink-0 gap-1 rounded-full bg-white/10 p-0.5">
           {tabs.map(([m, label]) => (
             <button
               key={m}
@@ -38,7 +38,9 @@ export function StandHeader({
           ))}
         </div>
       </div>
-      <div className="flex items-center gap-3 text-[12px] text-white/60">{right}</div>
+      <div className="flex shrink-0 items-center gap-3 truncate text-[12px] text-white/60">
+        {right}
+      </div>
     </div>
   );
 }
@@ -85,7 +87,7 @@ export function Sidebar() {
 export function TabBar({ active = "Платежи" }: { active?: string }) {
   const tabs = ["Главный", "Платежи", "Выгода", "История", "Чаты"];
   return (
-    <div className="flex gap-6 px-1 pb-3 text-[15px]">
+    <div className="flex gap-4 overflow-x-auto whitespace-nowrap px-1 pb-3 text-[15px] sm:gap-6">
       {tabs.map((t) => (
         <span
           key={t}

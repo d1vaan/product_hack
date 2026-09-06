@@ -245,6 +245,19 @@ export default function App() {
     });
   }, [mode, scenarioId, knobs.mechanic, knobs.openDelay, simDate]);
 
+  // живое переключение механики подачи DRIFT / порога прямо на экране перевода
+  useEffect(() => {
+    if (!activeScenario || !ev) return;
+    if (screen !== "transfer" && screen !== "confirm") return;
+    if (ev.state !== "DRIFT") return;
+    const entry = ev.entry || "SELF";
+    api
+      .evaluate(evalBody(entry, simDate))
+      .then(setEv)
+      .catch((e) => console.error(e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [knobs.mechanic, knobs.driftThreshold]);
+
   // --- переходы ---------------------------------------------------
   async function openPush() {
     if (!activeScenario) return;
@@ -436,38 +449,16 @@ export default function App() {
           <main className="relative min-w-0 flex-1">
             {/* Пуш поверх интерфейса */}
             {screen === "push" && pushEval && activeScenario?.push_sent_at && (
-              <>
-                <PushToast
-                  text={pushEval.push_text || "Курс изменился"}
-                  sentAtMinutes={hhmm(activeScenario.push_sent_at)}
-                  onOpen={openPush}
-                  onClose={() => setScreen("home")}
-                />
-                {activeScenario.id === "S6" && (
-                  <>
-                    <div className="pointer-events-none absolute right-6 top-[92px] w-[380px] max-w-[calc(100%-2rem)] scale-[.98] opacity-70">
-                      <div className="rounded-[20px] bg-surface p-4 shadow-toast">
-                        <p className="text-[14px] text-text-muted">
-                          Ещё одно уведомление о курсе — вчера
-                        </p>
-                      </div>
-                    </div>
-                    <div className="pointer-events-none absolute right-6 top-[150px] w-[380px] max-w-[calc(100%-2rem)] scale-[.96] opacity-50">
-                      <div className="rounded-[20px] bg-surface p-4 shadow-toast">
-                        <p className="text-[14px] text-text-muted">
-                          Уведомление о курсе — позавчера
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setScreen("settings")}
-                      className="absolute right-6 top-[210px] text-[13px] text-accent underline"
-                    >
-                      Слишком часто — настроить уведомления
-                    </button>
-                  </>
-                )}
-              </>
+              <PushToast
+                text={pushEval.push_text || "Курс изменился"}
+                sentAtMinutes={hhmm(activeScenario.push_sent_at)}
+                onOpen={openPush}
+                onClose={() => setScreen("home")}
+                stacked={activeScenario.id === "S6"}
+                onSettings={
+                  activeScenario.id === "S6" ? () => setScreen("settings") : undefined
+                }
+              />
             )}
 
             <TabBar active="Платежи" />
