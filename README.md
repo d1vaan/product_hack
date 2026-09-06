@@ -92,7 +92,7 @@
 
 | Файл | Ответственность |
 |---|---|
-| `main.py` | FastAPI-приложение, ~25 ручек `/api/*`, `/api/health` с probe трёх ML-сервисов, passthrough `/api/ml/*` |
+| `main.py` | FastAPI-приложение, 22 ручки `/api/*`, `/api/health` с probe трёх ML-сервисов, passthrough `/api/ml/*` |
 | `config.py` | все параметры из env, значения по умолчанию = `.env.example` |
 | `data_access.py` | чтение `data/*`, метаданные коридоров (падежи валют), помощники по ряду (`rate_on`, `window_values`, `percentile_rank`, `next_trading_day`) |
 | `signals.py` | источник сигналов: файл `data/signals.json` или HTTP по `ML_URL` с откатом; трекает активный источник для `/api/health` |
