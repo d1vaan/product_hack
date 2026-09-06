@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 web/node_modules/
 web/dist/
+web/*.tsbuildinfo
 .DS_Store
 
 # ML: локальный кэш прогрева (том mldata живёт в docker volume, но на всякий случай)

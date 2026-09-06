@@ -1,51 +1,16 @@
-import type { Mechanic, Mode } from "./types";
-
-// Состояние прогона, кодируемое в query-строке (BFR-22 / ТЗ §6).
+// Состояние прогона в query-строке — теперь только выбранный сценарий.
 export interface UrlState {
-  mode: Mode;
   scenario: string | null;
-  persona: string | null;
-  corridor: string | null;
-  date: string | null;
-  delay: number | null;
-  mechanic: Mechanic;
 }
-
-const DEFAULTS: UrlState = {
-  mode: "demo",
-  scenario: "S2",
-  persona: null,
-  corridor: null,
-  date: null,
-  delay: null,
-  mechanic: "C",
-};
 
 export function readUrl(): UrlState {
   const p = new URLSearchParams(location.search);
-  const mode = (p.get("mode") as Mode) || DEFAULTS.mode;
-  return {
-    mode: ["demo", "review", "data"].includes(mode) ? mode : "demo",
-    scenario: p.get("scenario"),
-    persona: p.get("persona"),
-    corridor: p.get("corridor"),
-    date: p.get("date"),
-    delay: p.get("delay") ? Number(p.get("delay")) : null,
-    mechanic: ((p.get("mechanic") as Mechanic) || DEFAULTS.mechanic).toUpperCase() as Mechanic,
-  };
+  return { scenario: p.get("scenario") };
 }
 
-export function writeUrl(s: Partial<UrlState>) {
-  const cur = readUrl();
-  const next = { ...cur, ...s };
+export function writeUrl(s: UrlState) {
   const p = new URLSearchParams();
-  if (next.mode && next.mode !== "demo") p.set("mode", next.mode);
-  if (next.scenario) p.set("scenario", next.scenario);
-  if (next.persona) p.set("persona", next.persona);
-  if (next.corridor) p.set("corridor", next.corridor);
-  if (next.date) p.set("date", next.date);
-  if (next.delay != null) p.set("delay", String(next.delay));
-  if (next.mechanic && next.mechanic !== "C") p.set("mechanic", next.mechanic);
+  if (s.scenario) p.set("scenario", s.scenario);
   const qs = p.toString();
   history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
 }
@@ -91,7 +56,7 @@ export function pct(bp: number): string {
 }
 
 export function ddmm(iso: string): string {
-  const [y, m, d] = iso.split("-");
+  const [, m, d] = iso.split("-");
   return `${d}.${m}`;
 }
 

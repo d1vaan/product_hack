@@ -1,21 +1,16 @@
 import { useState } from "react";
 import type { Corridor, ReserveView } from "../types";
-import { PrimaryButton, SecondaryButton, GhostButton } from "../components/ui";
+import { PrimaryButton, SecondaryButton, GhostButton, Actions } from "../components/ui";
 import { ddmm, money, rate, units } from "../store";
 
-// Три пресета условия. Числа в подписях — из бэктеста (здесь — заглушка,
-// помечено как параметр стенда в панели разбора).
 const PRESETS = [
-  { id: "careful", label: "Осторожный", percentile: 40, window: 30, note: "обычно срабатывает за 2–3 дня" },
-  { id: "normal", label: "Обычный", percentile: 25, window: 30, note: "обычно срабатывает за 5–7 дней" },
-  { id: "patient", label: "Терпеливый", percentile: 10, window: 60, note: "срабатывает не всегда, зато выигрыш больше" },
+  { id: "careful", label: "Осторожный", percentile: 40, window: 30, note: "обычно за 2–3 дня" },
+  { id: "normal", label: "Обычный", percentile: 25, window: 30, note: "обычно за 5–7 дней" },
+  { id: "patient", label: "Терпеливый", percentile: 10, window: 60, note: "не всегда, зато выигрыш больше" },
 ];
 
-// R1 — Настройка резерва. Три факта видны без прокрутки: сколько блокируется,
-// когда вернётся, как отменить. Резерв никогда не предвыбран и не основное
-// действие.
+// R1 — настройка резерва. Резерв никогда не предвыбран и не основное действие.
 export function ReserveSetup({
-  corridor,
   defaultAmount,
   onCreate,
   onBack,
@@ -36,10 +31,10 @@ export function ReserveSetup({
   const amountNum = Number(amount.replace(/\D/g, "")) || 0;
 
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-[28px] font-bold">Дождаться выгодного курса</h1>
+    <div className="animate-fade-in px-5 py-4">
+      <h1 className="text-[22px] font-bold">Дождаться выгодного курса</h1>
 
-      <div className="mt-4 rounded-field bg-plaque p-5 text-[14px] leading-relaxed">
+      <div className="mt-4 rounded-field bg-plaque p-4 text-[14px] leading-relaxed">
         <div>
           <span className="text-text-muted">Заблокируем на счёте: </span>
           <span className="font-semibold">{money(amountNum)}</span>
@@ -54,7 +49,7 @@ export function ReserveSetup({
         </div>
       </div>
 
-      <div className="mt-5 space-y-3">
+      <div className="mt-4 space-y-3">
         <div className="rounded-field bg-field px-4 py-2.5">
           <div className="text-[13px] text-text-muted">Сумма</div>
           <input
@@ -104,7 +99,7 @@ export function ReserveSetup({
         </label>
       </div>
 
-      <div className="mt-6 flex items-center gap-3">
+      <Actions>
         <SecondaryButton
           onClick={() =>
             onCreate({
@@ -118,15 +113,14 @@ export function ReserveSetup({
           Зарезервировать
         </SecondaryButton>
         <GhostButton onClick={onBack}>Назад</GhostButton>
-      </div>
+      </Actions>
     </div>
   );
 }
 
-// R2 — Подтверждение резерва.
+// R2 — подтверждение резерва.
 export function ReserveConfirm({
   rv,
-  corridor,
   onDone,
 }: {
   rv: ReserveView;
@@ -134,9 +128,9 @@ export function ReserveConfirm({
   onDone: () => void;
 }) {
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-[28px] font-bold">Резерв создан</h1>
-      <div className="mt-5 rounded-field bg-field p-5 text-[15px]">
+    <div className="animate-fade-in px-5 py-4">
+      <h1 className="text-[22px] font-bold">Резерв создан</h1>
+      <div className="mt-4 rounded-field bg-field p-4 text-[15px]">
         <Row k="Заблокировано" v={money(rv.amount_rub)} />
         <Row k="Условие" v={rv.condition_text} />
         <Row k="Дата истечения" v={`через ${rv.ttl_days} дн.`} />
@@ -147,15 +141,16 @@ export function ReserveConfirm({
       </div>
       <p className="mt-3 text-[13px] text-text-muted">
         Отменить можно в любой момент на главной — карточка «Ожидание выгодного курса».
+        Кнопкой «+1 день» вверху можно промотать время и увидеть исполнение.
       </p>
-      <div className="mt-6">
+      <Actions>
         <PrimaryButton onClick={onDone}>Готово</PrimaryButton>
-      </div>
+      </Actions>
     </div>
   );
 }
 
-// R3 — Управление резервом.
+// R3 — управление резервом.
 export function ReserveManage({
   rv,
   onCancel,
@@ -169,9 +164,9 @@ export function ReserveManage({
 }) {
   const above = rv.distance_bp > 0;
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-[28px] font-bold">Ожидание выгодного курса</h1>
-      <div className="mt-5 rounded-field bg-field p-5 text-[15px]">
+    <div className="animate-fade-in px-5 py-4">
+      <h1 className="text-[22px] font-bold">Ожидание выгодного курса</h1>
+      <div className="mt-4 rounded-field bg-field p-4 text-[15px]">
         <Row k="Сумма" v={money(rv.amount_rub)} />
         <Row k="Условие" v={rv.condition_text} />
         <Row k="Осталось" v={`${rv.days_left} дн.`} />
@@ -188,16 +183,16 @@ export function ReserveManage({
         Порог: {rate(rv.threshold_rate)} ₽ · сейчас {rate(rv.current_rate)} ₽. Условие
         проверяется раз в сутки после публикации курса ЦБ.
       </div>
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <SecondaryButton onClick={onCancel}>Отменить</SecondaryButton>
+      <Actions>
         <PrimaryButton onClick={onTransferNow}>Перевести сейчас</PrimaryButton>
+        <SecondaryButton onClick={onCancel}>Отменить резерв</SecondaryButton>
         <GhostButton onClick={onBack}>Назад</GhostButton>
-      </div>
+      </Actions>
     </div>
   );
 }
 
-// R4 — Исполнение резерва.
+// R4 — исполнение резерва.
 export function ReserveExecuted({
   rv,
   corridor,
@@ -208,32 +203,29 @@ export function ReserveExecuted({
   onDone: () => void;
 }) {
   return (
-    <div className="animate-fade-in text-center">
-      <div className="mx-auto mt-4 flex h-14 w-14 items-center justify-center rounded-full bg-field text-2xl">
+    <div className="animate-fade-in px-5 py-8 text-center">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-field text-2xl">
         ✓
       </div>
-      <h1 className="mt-4 text-[28px] font-bold">Резерв исполнен</h1>
-      <div className="mx-auto mt-5 max-w-sm rounded-field bg-field p-5 text-left text-[15px]">
+      <h1 className="mt-4 text-[22px] font-bold">Резерв исполнен</h1>
+      <div className="mt-4 rounded-field bg-field p-4 text-left text-[15px]">
         <Row k="Отправлено" v={money(rv.amount_rub)} />
         <Row k="Курс исполнения" v={`${rate(rv.exec_rate)} ₽`} />
-        <Row
-          k="Получатель получит"
-          v={units(rv.recipient_gets_now, corridor.currency_name)}
-        />
+        <Row k="Получатель получит" v={units(rv.recipient_gets_now, corridor.currency_name)} />
         <Row k="Дней ожидания" v={String(rv.waited_days)} />
         <Row
           k="Выигрыш к дню оформления"
           v={`${rv.gain_bp && rv.gain_bp > 0 ? "+" : ""}${rv.gain_bp?.toFixed(0)} б.п.`}
         />
       </div>
-      <div className="mt-6 flex justify-center">
+      <Actions>
         <PrimaryButton onClick={onDone}>Готово</PrimaryButton>
-      </div>
+      </Actions>
     </div>
   );
 }
 
-// R5 — Истечение резерва. Плохой сценарий не прячем.
+// R5 — истечение резерва. Плохой сценарий не прячем.
 export function ReserveExpired({
   rv,
   onTransferNow,
@@ -244,16 +236,16 @@ export function ReserveExpired({
   onDone: () => void;
 }) {
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-[28px] font-bold">Срок резерва истёк</h1>
-      <div className="mt-4 rounded-field bg-plaque p-5 text-[15px] leading-relaxed">
-        Курс не опускался до порога {rate(rv.threshold_rate)} ₽ в течение {rv.ttl_days}{" "}
-        дней. Деньги разблокированы, перевод не выполнен.
+    <div className="animate-fade-in px-5 py-4">
+      <h1 className="text-[22px] font-bold">Срок резерва истёк</h1>
+      <div className="mt-4 rounded-field bg-plaque p-4 text-[15px] leading-relaxed">
+        Курс не опускался до порога {rate(rv.threshold_rate)} ₽ в течение {rv.ttl_days} дней.
+        Деньги разблокированы, перевод не выполнен.
       </div>
-      <div className="mt-6 flex items-center gap-3">
+      <Actions>
         <PrimaryButton onClick={onTransferNow}>Перевести сейчас</PrimaryButton>
         <GhostButton onClick={onDone}>Готово</GhostButton>
-      </div>
+      </Actions>
     </div>
   );
 }

@@ -1,14 +1,12 @@
 import { useState } from "react";
 import type { Corridor, Evaluation, Persona } from "../types";
-import { PrimaryButton, SecondaryButton, Field, Chip, GhostButton } from "../components/ui";
+import { PrimaryButton, SecondaryButton, Field, Chip, GhostButton, Actions } from "../components/ui";
 import { Plaque } from "../components/Plaque";
 import { ddmm, money, rate, units } from "../store";
 
 const DISCLAIMER = "Курс перевода может отличаться от официального";
 
-// B3 — Экран перевода. Один экран, меняется плашка над формой и состав
-// действий под ней. Отдельного «пути с ручным вводом» нет — есть незаполненное
-// поле. Строка «Получатель получит» — наш новый элемент (сегодня его нет).
+// B3 — экран перевода. Один экран; над формой — плашка, под ней — действия.
 export function TransferScreen({
   ev,
   persona,
@@ -26,8 +24,7 @@ export function TransferScreen({
   onSecondary: () => void;
   onBack: () => void;
 }) {
-  // Предзаполнение только при state OK/BETTER и входе по пушу (BFR-11).
-  // При DRIFT форма не предзаполняется суммой автоматически.
+  // Предзаполнение только при state OK/BETTER и входе по пушу.
   const [phone, setPhone] = useState(ev.prefill ? persona.recipient_phone : "");
   const [purpose, setPurpose] = useState(ev.prefill ? "Помощь семье" : "");
   const [amount, setAmount] = useState(
@@ -47,20 +44,17 @@ export function TransferScreen({
         : null;
 
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-[28px] font-bold leading-tight">
-        Перевод по номеру телефона за рубеж
-      </h1>
+    <div className="animate-fade-in px-5 py-4">
+      <h1 className="text-[22px] font-bold leading-tight">Перевод по телефону за рубеж</h1>
       <p className="mt-1 text-[13px] text-text-muted">
         {corridor.flag} {corridor.country} · без комиссии, от 100 ₽ до 800 000 ₽
       </p>
 
-      {/* Plaque — новый блок между заголовком и полями */}
-      <div className="mt-5">
+      <div className="mt-4">
         <Plaque ev={ev} />
       </div>
 
-      <div className="mt-5 space-y-3">
+      <div className="mt-4 space-y-3">
         <Field label="Счёт списания" value="Текущий счёт · 1 248 300 ₽" />
         <Field
           label="Номер телефона получателя"
@@ -95,7 +89,6 @@ export function TransferScreen({
           </Chip>
         </div>
 
-        {/* новая строка — сегодня её на экране нет */}
         <div className="pt-1">
           <div className="text-[15px]">
             Получатель получит ≈{" "}
@@ -113,7 +106,7 @@ export function TransferScreen({
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center gap-3">
+      <Actions>
         <PrimaryButton disabled={!canSend} onClick={() => onTransfer(amountNum)}>
           {primaryLabel}
         </PrimaryButton>
@@ -122,12 +115,12 @@ export function TransferScreen({
         ) : (
           <GhostButton onClick={onBack}>Не сейчас</GhostButton>
         )}
-      </div>
+      </Actions>
     </div>
   );
 }
 
-// B4 — Подтверждение. Строки комиссии нет. Повторная оговорка про курс.
+// B4 — подтверждение.
 export function TransferConfirm({
   ev,
   corridor,
@@ -152,28 +145,28 @@ export function TransferConfirm({
     ["Срок зачисления", "обычно в течение часа"],
   ];
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-[28px] font-bold">Подтверждение перевода</h1>
-      <div className="mt-5 rounded-field bg-field p-5">
+    <div className="animate-fade-in px-5 py-4">
+      <h1 className="text-[22px] font-bold">Подтверждение перевода</h1>
+      <div className="mt-4 rounded-field bg-field p-4">
         {rows.map(([k, v]) => (
-          <div key={k} className="flex justify-between py-2 text-[15px]">
+          <div key={k} className="flex justify-between gap-3 py-2 text-[15px]">
             <span className="text-text-muted">{k}</span>
-            <span className="font-semibold text-right">{v}</span>
+            <span className="text-right font-semibold">{v}</span>
           </div>
         ))}
       </div>
       <p className="mt-3 text-[13px] text-text-muted">
         Показан официальный курс ЦБ РФ. Курс перевода может отличаться.
       </p>
-      <div className="mt-6 flex items-center gap-3">
+      <Actions>
         <PrimaryButton onClick={onConfirm}>Подтвердить</PrimaryButton>
         <GhostButton onClick={onBack}>Назад</GhostButton>
-      </div>
+      </Actions>
     </div>
   );
 }
 
-// B5 — Успех.
+// B5 — успех.
 export function TransferSuccess({
   ev,
   corridor,
@@ -187,19 +180,18 @@ export function TransferSuccess({
 }) {
   const recipientGets = Math.round(amountRub / ev.current_rate);
   return (
-    <div className="animate-fade-in text-center">
-      <div className="mx-auto mt-4 flex h-14 w-14 items-center justify-center rounded-full bg-field text-2xl">
+    <div className="animate-fade-in px-5 py-8 text-center">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-field text-2xl">
         ✓
       </div>
-      <h1 className="mt-4 text-[28px] font-bold">Перевод отправлен</h1>
+      <h1 className="mt-4 text-[22px] font-bold">Перевод отправлен</h1>
       <p className="mt-2 text-[17px] font-semibold">
         {units(recipientGets, corridor.currency_name)} получателю
       </p>
       <p className="mt-1 text-[13px] text-text-muted">Зачисление обычно в течение часа</p>
-      <div className="mt-6 flex justify-center gap-3">
+      <Actions>
         <PrimaryButton onClick={onDone}>Готово</PrimaryButton>
-        <SecondaryButton onClick={onDone}>Сообщить получателю</SecondaryButton>
-      </div>
+      </Actions>
     </div>
   );
 }

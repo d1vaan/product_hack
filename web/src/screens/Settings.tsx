@@ -1,9 +1,9 @@
 import { useState } from "react";
 import type { Corridor } from "../types";
-import { PrimaryButton, GhostButton } from "../components/ui";
+import { PrimaryButton, Actions } from "../components/ui";
 
-// B6 — Настройки уведомлений. Стоит в базовом уровне: путь без выхода
-// «пишите реже» не соответствует коммуникационной политике.
+// B6 — настройки уведомлений о курсе. Путь без выхода «пишите реже» не
+// соответствует коммуникационной политике, поэтому экран есть всегда.
 export function NotificationSettings({
   corridors,
   activeCorridor,
@@ -24,8 +24,8 @@ export function NotificationSettings({
   const [quiet, setQuiet] = useState(true);
 
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-[28px] font-bold">Уведомления о курсе</h1>
+    <div className="animate-fade-in px-5 py-4">
+      <h1 className="text-[22px] font-bold">Уведомления о курсе</h1>
 
       {overloaded && (
         <div className="mt-4 rounded-field bg-plaque p-4 text-[14px] leading-relaxed">
@@ -49,9 +49,7 @@ export function NotificationSettings({
               <input
                 type="checkbox"
                 checked={!!enabled[c.corridor]}
-                onChange={(e) =>
-                  setEnabled({ ...enabled, [c.corridor]: e.target.checked })
-                }
+                onChange={(e) => setEnabled({ ...enabled, [c.corridor]: e.target.checked })}
               />
             </label>
           ))}
@@ -61,16 +59,18 @@ export function NotificationSettings({
       <div className="mt-5">
         <div className="mb-2 text-[13px] text-text-muted">Частота</div>
         <div className="flex gap-2">
-          {([
-            ["low", "Реже"],
-            ["normal", "Обычно"],
-            ["off", "Отключить"],
-          ] as const).map(([v, l]) => (
+          {(
+            [
+              ["low", "Реже"],
+              ["normal", "Обычно"],
+              ["off", "Отключить"],
+            ] as const
+          ).map(([v, l]) => (
             <button
               key={v}
               onClick={() => setFreq(v)}
               className={
-                "h-10 rounded-full px-4 text-[14px] transition " +
+                "h-10 flex-1 rounded-full px-3 text-[14px] transition " +
                 (freq === v ? "bg-cta text-white" : "bg-field text-text")
               }
             >
@@ -85,10 +85,9 @@ export function NotificationSettings({
         <input type="checkbox" checked={quiet} onChange={(e) => setQuiet(e.target.checked)} />
       </label>
 
-      <div className="mt-6 flex items-center gap-3">
+      <Actions>
         <PrimaryButton onClick={onSave}>Сохранить</PrimaryButton>
-        <GhostButton onClick={onSave}>Отписаться от всех</GhostButton>
-      </div>
+      </Actions>
     </div>
   );
 }

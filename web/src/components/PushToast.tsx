@@ -1,10 +1,8 @@
 import { X } from "lucide-react";
 import { minutesToHHMM } from "../store";
 
-// B1 — карточка уведомления в правом верхнем углу поверх интерфейса.
-// Имитация браузерного уведомления, 380 px. Экрана блокировки в вебе нет.
-// Ровно один факт с числом и периодом, без глаголов будущего и «успейте».
-
+// B1 — системное уведомление, съезжает сверху экрана телефона. Ровно один факт
+// с числом и периодом, без глаголов будущего и «успейте».
 export function PushToast({
   text,
   sentAtMinutes,
@@ -21,41 +19,45 @@ export function PushToast({
   stacked?: boolean;
 }) {
   return (
-    <div className="pointer-events-auto absolute right-6 top-6 z-30 w-[380px] max-w-[calc(100%-2rem)] animate-toast-in">
-      {stacked && (
-        <>
-          <div className="absolute inset-x-2 -bottom-2 h-full scale-[.96] rounded-[20px] bg-surface opacity-50 shadow-toast" />
-          <div className="absolute inset-x-1 -bottom-1 h-full scale-[.98] rounded-[20px] bg-surface opacity-70 shadow-toast" />
-        </>
-      )}
-      <div className="relative rounded-[20px] bg-surface p-4 shadow-toast">
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-cta text-[13px] font-bold text-white">
-            A
-          </div>
-          <button className="min-w-0 flex-1 text-left" onClick={onOpen}>
-            <div className="flex items-center justify-between">
-              <span className="text-[15px] font-semibold text-text">Альфа-Онлайн</span>
-              <span className="text-[12px] text-text-muted">{minutesToHHMM(sentAtMinutes)}</span>
-            </div>
-            <p className="mt-0.5 text-[14px] leading-snug text-text">{text}</p>
-          </button>
-          <button
-            aria-label="Закрыть уведомление"
-            onClick={onClose}
-            className="shrink-0 text-text-muted transition hover:text-text"
-          >
-            <X size={16} />
-          </button>
-        </div>
-        {onSettings && (
-          <button
-            onClick={onSettings}
-            className="mt-2 w-full rounded-btn bg-field py-1.5 text-[13px] font-medium text-accent transition active:scale-[.99]"
-          >
-            Слишком часто — настроить уведомления
-          </button>
+    <div className="animate-toast-in absolute inset-x-0 top-0 z-30 px-3 pt-2">
+      <div className="relative mx-auto max-w-[380px]">
+        {stacked && (
+          <>
+            <div className="absolute inset-x-3 top-3 h-full scale-[.97] rounded-[22px] bg-[#dfe1e6] shadow-toast" />
+            <div className="absolute inset-x-1.5 top-1.5 h-full scale-[.985] rounded-[22px] bg-[#eceef1] shadow-toast" />
+          </>
         )}
+        <div className="relative rounded-[22px] bg-surface p-3.5 shadow-toast ring-1 ring-black/5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-cta text-[13px] font-bold text-white">
+              A
+            </div>
+            <button className="min-w-0 flex-1 text-left" onClick={onOpen}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[14px] font-semibold text-text">Альфа-Онлайн</span>
+                <span className="text-[11px] text-text-muted">
+                  {minutesToHHMM(sentAtMinutes)}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[13px] leading-snug text-text">{text}</p>
+            </button>
+            <button
+              aria-label="Закрыть уведомление"
+              onClick={onClose}
+              className="shrink-0 text-text-muted transition hover:text-text"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          {onSettings && (
+            <button
+              onClick={onSettings}
+              className="mt-2.5 w-full rounded-btn bg-field py-2 text-[12px] font-medium text-accent transition active:scale-[.99]"
+            >
+              Слишком часто — настроить уведомления
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

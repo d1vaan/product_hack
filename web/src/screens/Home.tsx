@@ -3,10 +3,9 @@ import type { Corridor, Persona, ReserveView } from "../types";
 import { Card } from "../components/ui";
 import { ddmm, units } from "../store";
 
-// B2 — Главная. Блок «Быстрые переводы» с плитками, ниже маркетинговые ряды.
-// Карточка активного резерва вставляется под «Быстрые переводы».
+// Главная приложения. Единственное живое действие — «За рубеж»; остальные
+// пункты — визуальный фон, не кликаются (не «сломанные кнопки»).
 export function Home({
-  persona,
   corridor,
   reserve,
   onStartTransfer,
@@ -22,26 +21,34 @@ export function Home({
     reserve && ["ACTIVE", "EXECUTED", "EXPIRED"].includes(reserve.state);
 
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-[32px] font-bold">Платежи</h1>
+    <div className="animate-fade-in px-5 py-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-[26px] font-bold">Платежи</h1>
+        <div className="h-9 w-9 rounded-full bg-field" />
+      </div>
 
-      <section className="mt-6">
-        <h2 className="mb-3 text-[15px] font-semibold text-text-muted">Быстрые переводы</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="mt-4 rounded-product bg-surface p-4 shadow-card">
+        <div className="text-[13px] text-text-muted">Текущий счёт</div>
+        <div className="text-[24px] font-bold">1 248 300 ₽</div>
+      </div>
+
+      <section className="mt-5">
+        <h2 className="mb-2 text-[14px] font-semibold text-text-muted">Быстрые переводы</h2>
+        <div className="grid grid-cols-3 gap-2.5">
           <button
             onClick={onStartTransfer}
-            className="flex h-24 flex-col justify-between rounded-product bg-field p-4 text-left transition active:scale-[.99]"
+            className="flex h-24 flex-col justify-between rounded-product bg-field p-3 text-left transition active:scale-[.98]"
           >
             <span className="text-2xl">🌍</span>
-            <span className="text-[14px] font-medium">За рубеж</span>
+            <span className="text-[13px] font-medium leading-tight">За рубеж</span>
           </button>
-          {["По телефону", "Между счетами", "По реквизитам", "Себе"].map((t) => (
+          {["По телефону", "Между счетами"].map((t) => (
             <div
               key={t}
-              className="flex h-24 flex-col justify-between rounded-product bg-field p-4 opacity-60"
+              className="flex h-24 flex-col justify-between rounded-product bg-field/70 p-3 text-text-muted"
             >
-              <span className="text-2xl">↦</span>
-              <span className="text-[14px] font-medium">{t}</span>
+              <span className="text-2xl opacity-50">↦</span>
+              <span className="text-[13px] font-medium leading-tight">{t}</span>
             </div>
           ))}
         </div>
@@ -49,11 +56,11 @@ export function Home({
 
       {showReserve && (
         <button onClick={onManageReserve} className="mt-4 block w-full text-left">
-          <Card className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
+          <Card className="p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
                 <div className="text-[13px] text-text-muted">Ожидание выгодного курса</div>
-                <div className="text-[15px] font-semibold">
+                <div className="truncate text-[15px] font-semibold">
                   {units(reserve!.amount_rub, "₽")} · {corridor.country}
                 </div>
                 <div className="mt-1 text-[13px] text-text-muted">
@@ -64,15 +71,18 @@ export function Home({
                   {reserve!.state === "EXPIRED" && "Срок истёк, деньги разблокированы"}
                 </div>
               </div>
-              <ChevronRight className="text-text-muted" />
+              <ChevronRight className="shrink-0 text-text-muted" />
             </div>
           </Card>
         </button>
       )}
 
-      <section className="mt-6 space-y-3">
+      <section className="mt-5 space-y-2.5">
         {["Деньги за рекомендации", "Альфа-Выгодно"].map((t) => (
-          <div key={t} className="rounded-product bg-field p-5 text-[15px] text-text-muted">
+          <div
+            key={t}
+            className="rounded-product bg-field/70 p-4 text-[15px] text-text-muted"
+          >
             {t}
           </div>
         ))}
@@ -81,7 +91,7 @@ export function Home({
   );
 }
 
-// B2a — «За рубеж»: список стран. Воспроизводится как есть.
+// «За рубеж»: список стран получателя.
 export function CountryList({
   corridors,
   current,
@@ -92,15 +102,14 @@ export function CountryList({
   onPick: (c: string) => void;
 }) {
   const order = ["RUB_TJS", "RUB_UZS", "RUB_KGS", "RUB_KZT", "RUB_AMD"];
-  const extra = ["Беларусь", "Азербайджан", "Китай"];
   const sorted = [...corridors].sort(
     (a, b) => order.indexOf(a.corridor) - order.indexOf(b.corridor)
   );
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-[32px] font-bold">Перевод за рубеж</h1>
+    <div className="animate-fade-in px-5 py-4">
+      <h1 className="text-[22px] font-bold">Перевод за рубеж</h1>
       <p className="mt-1 text-[13px] text-text-muted">Выберите страну получателя</p>
-      <div className="mt-5 space-y-1">
+      <div className="mt-4 space-y-1">
         {sorted.map((c) => (
           <button
             key={c.corridor}
@@ -113,15 +122,6 @@ export function CountryList({
             <span className="text-xl">{c.flag}</span>
             <span className="font-medium">{c.country}</span>
           </button>
-        ))}
-        {extra.map((c) => (
-          <div
-            key={c}
-            className="flex items-center gap-3 rounded-field px-4 py-3 text-[15px] text-text-muted opacity-60"
-          >
-            <span className="text-xl">·</span>
-            {c}
-          </div>
         ))}
       </div>
     </div>

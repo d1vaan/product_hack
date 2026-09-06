@@ -1,8 +1,7 @@
-import { PrimaryButton, SecondaryButton, GhostButton } from "../components/ui";
+import { PrimaryButton, SecondaryButton, GhostButton, Actions } from "../components/ui";
 import { units } from "../store";
 
-// C10 / O1 — Предупреждение о лимите получателя (сценарий S7).
-// Решение о канале принимает не только отправитель.
+// C10 / O1 — предупреждение о лимите получателя (сценарий S7).
 export function RecipientLimitWarning({
   check,
   onSplit,
@@ -23,11 +22,11 @@ export function RecipientLimitWarning({
   onBack: () => void;
 }) {
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-[28px] font-bold">Проверьте лимит получателя</h1>
-      <div className="mt-4 rounded-field bg-plaque p-5 text-[15px] leading-relaxed">
-        У получателя {check.reason}. Лимит: {units(check.per_operation, check.currency_short)}{" "}
-        за операцию, {units(check.per_month, check.currency_short)} в месяц. Этот перевод —{" "}
+    <div className="animate-fade-in px-5 py-4">
+      <h1 className="text-[22px] font-bold">Проверьте лимит получателя</h1>
+      <div className="mt-4 rounded-field bg-plaque p-4 text-[15px] leading-relaxed">
+        У получателя {check.reason}. Лимит: {units(check.per_operation, check.currency_short)} за
+        операцию, {units(check.per_month, check.currency_short)} в месяц. Этот перевод —{" "}
         {units(check.recipient_units, check.currency_short)}
         {check.exceeds_operation
           ? " — превышает лимит за операцию."
@@ -35,11 +34,11 @@ export function RecipientLimitWarning({
             ? " — почти исчерпает месячный лимит."
             : "."}
       </div>
-      <div className="mt-6 flex flex-wrap items-center gap-3">
+      <Actions>
         <PrimaryButton onClick={onSplit}>Разбить на части</PrimaryButton>
         <SecondaryButton onClick={onProceed}>Всё равно перевести</SecondaryButton>
         <GhostButton onClick={onBack}>Назад</GhostButton>
-      </div>
+      </Actions>
     </div>
   );
 }

@@ -14,17 +14,17 @@ body,
 
 body {
   margin: 0;
-  background: #ebecef;
+  background: #15161a;
   color: #0a0a0a;
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Появление пуш-тоста: сдвиг сверху + затухание, не длиннее 300 мс. */
+/* Появление пуш-уведомления: съезд сверху + затухание. */
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(-12px);
+    transform: translateY(-16px);
   }
   to {
     opacity: 1;
@@ -32,7 +32,7 @@ body {
   }
 }
 .animate-toast-in {
-  animation: toast-in 240ms ease-out;
+  animation: toast-in 260ms ease-out;
 }
 
 @keyframes fade-in {
@@ -45,16 +45,4 @@ body {
 }
 .animate-fade-in {
   animation: fade-in 160ms ease-out;
-}
-
-/* Точечный маркер числа-допущения (только в панели разбора). */
-.assumption-dot::after {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-left: 4px;
-  border-radius: 9999px;
-  background: #8a8f98;
-  vertical-align: middle;
 }

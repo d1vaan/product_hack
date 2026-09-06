@@ -1,20 +1,18 @@
 import React from "react";
 
-// Примитивы по дизайн-системе ТЗ §9.6. Обводок нет нигде — только заливки и
-// отступы. Радиусы и высоты зафиксированы.
+// Примитивы по дизайн-системе: обводок нет, только заливки и отступы.
+// На телефоне действия — во всю ширину, стопкой.
 
 export function PrimaryButton({
   children,
-  full,
   ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { full?: boolean }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       {...rest}
       className={
-        "h-14 rounded-btn bg-cta px-8 text-[16px] font-semibold text-white " +
+        "flex h-12 w-full items-center justify-center rounded-btn bg-cta px-6 text-[16px] font-semibold text-white " +
         "transition active:scale-[.99] disabled:opacity-40 " +
-        (full ? "w-full " : "") +
         (rest.className || "")
       }
     >
@@ -25,16 +23,14 @@ export function PrimaryButton({
 
 export function SecondaryButton({
   children,
-  full,
   ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { full?: boolean }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       {...rest}
       className={
-        "h-14 rounded-btn bg-field px-6 text-[16px] font-semibold text-text " +
+        "flex h-12 w-full items-center justify-center rounded-btn bg-field px-6 text-[16px] font-semibold text-text " +
         "transition active:scale-[.99] disabled:opacity-40 " +
-        (full ? "w-full " : "") +
         (rest.className || "")
       }
     >
@@ -51,13 +47,18 @@ export function GhostButton({
     <button
       {...rest}
       className={
-        "text-[14px] text-text-muted underline-offset-2 hover:underline " +
+        "mx-auto block py-2 text-[14px] text-text-muted underline-offset-2 hover:underline " +
         (rest.className || "")
       }
     >
       {children}
     </button>
   );
+}
+
+// Вертикальная стопка действий внизу экрана.
+export function Actions({ children }: { children: React.ReactNode }) {
+  return <div className="mt-6 space-y-2">{children}</div>;
 }
 
 export function Field({
@@ -133,20 +134,9 @@ export function BackButton({ onClick }: { onClick: () => void }) {
     <button
       onClick={onClick}
       aria-label="Назад"
-      className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-surface text-text shadow-card transition active:scale-95"
+      className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-surface text-text shadow-card transition active:scale-95"
     >
       <span className="text-xl leading-none">‹</span>
     </button>
-  );
-}
-
-// Пометка «параметр стенда» — только в панели разбора, не в клиентском макете.
-export function AssumptionMark({ title }: { title?: string }) {
-  return (
-    <span
-      className="assumption-dot"
-      title={title || "оценка, параметр стенда"}
-      aria-label="параметр стенда"
-    />
   );
 }
