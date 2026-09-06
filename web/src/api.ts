@@ -37,6 +37,10 @@ export const api = {
     j<{ as_of: string; model_version: string; signals: any[] }>(
       `/signals?as_of=${asOf}` + (corridor ? `&corridor=${corridor}` : "")
     ),
+  mlEngineSignals: (asOf: string, corridor?: string) =>
+    j<any>(`/ml/engine-signals?as_of=${asOf}` + (corridor ? `&corridor=${corridor}` : "")),
+  mlDecisions: (asOf: string, corridor?: string) =>
+    j<any>(`/ml/decisions?as_of=${asOf}` + (corridor ? `&corridor=${corridor}` : "")),
   runScenario: (
     id: string,
     opts: { mechanic?: string; driftThresholdBp?: number; amountRub?: number; simDate?: string; openDelayMin?: number } = {}

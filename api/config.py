@@ -2,14 +2,18 @@
 совпадают с .env.example и с решениями user-path-v2 / ТЗ."""
 import os
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 # Пути к данным (том ./data:/data:ro в compose; локально — ../data).
 DATA_DIR = os.getenv("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
 LOGS_DIR = os.getenv("LOGS_DIR", os.path.join(os.path.dirname(__file__), "..", "logs"))
 
-# Источник сигналов: пусто → файл data/signals.json; иначе — HTTP к контейнеру модели.
+# Источник сигналов: пусто → файл data/signals.json; иначе — HTTP к модели пуша.
 ML_URL = os.getenv("ML_URL", "").strip()
+# Источник курсов: пусто → файл data/rates.csv; иначе — HTTP к парсеру котировок.
+RATES_URL = os.getenv("RATES_URL", "").strip()
+# Сырые сигналы движков «выгодного момента» для экрана данных (только проксирование).
+MOMENT_URL = os.getenv("MOMENT_URL", "").strip()
 ML_TIMEOUT_S = float(os.getenv("ML_TIMEOUT_S", "2"))
 
 # Порог состояния DRIFT: дельта против клиента, базисные пункты.

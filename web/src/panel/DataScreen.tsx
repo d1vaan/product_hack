@@ -94,10 +94,142 @@ export function DataScreen({
         </div>
       </div>
 
+      <MLPipeline corridor={corridor} simDate={simDate} health={health} />
+
       <div className="rounded-content bg-plaque p-4 text-[13px] leading-relaxed text-text-muted">
         Показан официальный курс ЦБ РФ, не курс исполнения. Данные — открытый дневной
         ряд. Отклик клиентов (открытия, конверсия, отписки) на стенде не измеряется —
         это меряет пилот.
+      </div>
+    </div>
+  );
+}
+
+// Видимая работа ML-конвейера: парсер котировок → модель выгодного момента
+// (rule+ML движки) → модель «какой сигнал в пуш» (метамодель + частотная политика).
+function MLPipeline({
+  corridor,
+  simDate,
+  health,
+}: {
+  corridor: string;
+  simDate: string;
+  health: Health | null;
+}) {
+  const [engines, setEngines] = useState<any | null>(null);
+  const [decision, setDecision] = useState<any | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const ml = health?.ml_services;
+  const anyMl =
+    ml && (ml.parser.configured || ml.moment_model.configured || ml.push_model.configured);
+
+  useEffect(() => {
+    if (!anyMl || !simDate) return;
+    let alive = true;
+    setErr(null);
+    api.mlEngineSignals(simDate, corridor)
+      .then((r) => alive && setEngines(r))
+      .catch((e) => alive && setErr(String(e)));
+    api.mlDecisions(simDate, corridor)
+      .then((r) => alive && setDecision(r))
+      .catch(() => alive && setDecision(null));
+    return () => {
+      alive = false;
+    };
+  }, [corridor, simDate, anyMl]);
+
+  if (!anyMl) {
+    return (
+      <div className="rounded-content bg-surface p-4 text-[13px] text-text-muted shadow-card">
+        ML-сервисы не подключены — стенд работает на файле <code>data/signals.json</code>.
+        Поднять конвейер: <code>docker compose -f docker-compose.yml -f
+        docker-compose.ml.yml --profile ml up --build</code>.
+      </div>
+    );
+  }
+
+  const svc = (label: string, p?: { configured: boolean; reachable?: boolean; health?: any }) => {
+    const ok = p?.configured && p?.reachable;
+    const mv = p?.health?.model_version || p?.health?.source || p?.health?.meta_model;
+    return (
+      <div className="rounded-field bg-field px-3 py-2">
+        <div className="flex items-center gap-2 text-[13px] font-semibold">
+          <span className={"h-2 w-2 rounded-full " + (ok ? "bg-black" : "bg-accent")} />
+          {label}
+        </div>
+        {mv && <div className="mt-0.5 text-[12px] text-text-muted">{String(mv)}</div>}
+      </div>
+    );
+  };
+
+  const fired: any[] =
+    (engines?.signals || []).filter((s: any) => s.signal) ?? [];
+
+  return (
+    <div className="rounded-content bg-surface p-4 shadow-card">
+      <div className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-text-muted">
+        ML-конвейер · срез {ddmm(engines?.as_of_scored || simDate)}
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {svc("1 · Парсер котировок", ml?.parser)}
+        {svc("2 · Модель момента", ml?.moment_model)}
+        {svc("3 · Модель пуша", ml?.push_model)}
+      </div>
+
+      {err && <div className="mt-2 text-[12px] text-accent">{err}</div>}
+
+      <div className="mt-3 text-[13px] font-semibold">
+        Движки «выгодного момента» ({engines?.n_fired ?? 0} из {engines?.n_engines ?? 0} сработали)
+      </div>
+      <div className="mt-1 overflow-x-auto">
+        <table className="w-full text-left text-[12px]">
+          <thead className="text-text-muted">
+            <tr>
+              <th className="py-1 pr-3">Сценарий</th>
+              <th className="py-1 pr-3">Семья</th>
+              <th className="py-1 pr-3">Гориз.</th>
+              <th className="py-1 pr-3">Тип</th>
+              <th className="py-1 pr-3">Движок</th>
+              <th className="py-1 pr-3">score</th>
+              <th className="py-1 pr-3">conf.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fired.map((s, i) => (
+              <tr key={i}>
+                <td className="py-1 pr-3">{s.scenario}</td>
+                <td className="py-1 pr-3">{s.target_family}</td>
+                <td className="py-1 pr-3">{s.horizon}</td>
+                <td className="py-1 pr-3">{s.engine_type}</td>
+                <td className="py-1 pr-3">{s.engine_name}</td>
+                <td className="py-1 pr-3">{s.raw_score == null ? "—" : Number(s.raw_score).toFixed(3)}</td>
+                <td className="py-1 pr-3">{s.confidence == null ? "—" : Number(s.confidence).toFixed(2)}</td>
+              </tr>
+            ))}
+            {fired.length === 0 && (
+              <tr>
+                <td colSpan={7} className="py-2 text-text-muted">
+                  на эту дату ни один движок по коридору не сработал
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-3 rounded-field bg-plaque p-3 text-[12px] leading-relaxed">
+        <span className="font-semibold">Решение модели пуша: </span>
+        {decision?.went_to_push?.length
+          ? decision.went_to_push
+              .map((e: any) => `${e.corridor} · ${e.scenario} · h${e.horizon} · conf ${Number(e.confidence).toFixed(2)}`)
+              .join("; ")
+          : "в этот день сигнал в пуш не ушёл"}
+        <div className="mt-1 text-text-muted">
+          {decision?.note ||
+            "движок сработал → метамодель по confidence/uplift → частотная политика (cooldown 3 дн., ≤2 за 7 дн.)"}
+        </div>
       </div>
     </div>
   );
