@@ -22,7 +22,7 @@ cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.ml.yml --profile ml up --build
 ```
 
-Первый старт: `ml-warmup` считает **15–30 минут** (walk-forward replay ~100 движков
+Первый старт: `ml-warmup` считает **~12–15 минут** (walk-forward replay ~100 движков
 с 2020 года + обучение метамодели). Результат кэшируется в docker-томе `ml_data` —
 повторные запуски мгновенные. Ускорить первый прогон: `ML_REPLAY_FROM=2024-01-01`
 в `.env` (~3–7 мин).
@@ -36,14 +36,15 @@ docker compose -f docker-compose.yml -f docker-compose.ml.yml --profile ml up --
 - `RATES_URL=http://parser:8000` — курсы берутся у парсера (при сбое — файл `data/rates.csv`);
 - `ML_URL=http://push-model:8000` — сигналы берутся у модели пуша в контракте
   `GET /health` + `GET /signals?as_of=&corridors=` (при сбое — `data/signals.json`);
-- `MOMENT_URL=http://moment-model:8000` — сырой поток движков для экрана «Данные».
+- `MOMENT_URL=http://moment-model:8000` — сырой поток движков, проксируется через
+  `GET /api/ml/*` (только API, без экрана в UI).
 
 `ml-warmup` дополнительно переписывает `data/rates.csv` реальными курсами ЦБ и
-`data/scenarios.json` (S1–S4) на реальные срабатывания модели. Синтетические
-оригиналы сохраняются в `data/*.synthetic.*`.
+`data/scenarios.json` / `data/signals.json` — на реальные срабатывания модели.
+Синтетические оригиналы сохраняются в `data/*.synthetic.*`.
 
-Всё видно в UI: режим **Данные** → блок «ML-конвейер» (статусы трёх сервисов,
-таблица сработавших движков на дату среза, решение модели пуша).
+Статусы всех трёх сервисов и факт отката на файлы видны в `GET /api/health`
+(`signals_source`, `rates_source`, `ml_services`).
 
 ## Эндпоинты сервисов
 
