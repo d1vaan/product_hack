@@ -38,7 +38,7 @@ export function StandHeader({
           ))}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-3 truncate text-[12px] text-white/60">
+      <div className="hidden shrink-0 items-center gap-3 truncate text-[12px] text-white/60 sm:flex">
         {right}
       </div>
     </div>

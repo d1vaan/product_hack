@@ -90,11 +90,16 @@ def evaluate(req: dict) -> dict:
 
     prefill = entry == "PUSH" and state in ("OK", "BETTER")
 
+    # Текст пуша берётся от сигнала, который его вызвал: сначала пробуем сигнал
+    # ровно на дату среза, иначе — последний сигнал по коридору до неё (пуш мог
+    # уйти на несколько дней раньше момента открытия, как в сценарии «момент
+    # изменился»).
+    push_sig = sig or signals_src.signal_for(req["sim_date"], corridor)
     push_text = None
-    if sig:
+    if entry == "PUSH" and push_sig:
         push_text = texts_mod.render(
-            texts_mod.texts().get(sig["scenario_code"], {}).get("push"),
-            sig.get("facts", {}), corridor)
+            texts_mod.texts().get(push_sig["scenario_code"], {}).get("push"),
+            push_sig.get("facts", {}), corridor)
 
     return {
         "state": state,
@@ -140,7 +145,10 @@ def _plaque(state: str, mechanic: str, corridor: str, sig: dict | None,
                 "forbidden": b["forbidden"], "why_forbidden": b["why_forbidden"]}
 
     if state == "NEUTRAL":
-        b = texts_mod.bundle("NEUTRAL", {"window_days": drift_facts["window_days"]}, corridor)
+        b = texts_mod.bundle("NEUTRAL", {
+            "window_days": drift_facts["window_days"],
+            "percentile": drift_facts["percentile"],
+        }, corridor)
         return {"scenario_code": "NEUTRAL", "text": b["plaque"], "context": None,
                 "forbidden": b["forbidden"], "why_forbidden": b["why_forbidden"]}
 

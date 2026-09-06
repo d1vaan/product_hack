@@ -76,7 +76,14 @@ export function units(n: number | null | undefined, currencyShort: string): stri
 
 export function rate(n: number | null | undefined): string {
   if (n == null) return "—";
-  return n.toFixed(5).replace(/0+$/, "").replace(/\.$/, "").replace(".", ",");
+  // адаптивная точность: у мелких валют (UZS ≈ 0,0069) 5 знаков теряют цифры
+  const abs = Math.abs(n);
+  const digits = abs >= 100 ? 2 : abs >= 1 ? 4 : abs >= 0.01 ? 5 : 6;
+  return n
+    .toFixed(digits)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "")
+    .replace(".", ",");
 }
 
 export function pct(bp: number): string {

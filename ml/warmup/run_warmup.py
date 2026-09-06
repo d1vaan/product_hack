@@ -194,6 +194,24 @@ def main() -> int:
             events, SignalPolicyConfig(cooldown_days=3, max_signals_per_7d=2),
         )
         log(f"событий после частотной политики (cooldown 3д, ≤2/7д): {len(push_events)}")
+
+        # Если обученная метамодель отфильтровала весь поток WINDOW_CLOSING —
+        # добираем его отдельным deterministic confidence-filter проходом только
+        # по W1-сигналам, чтобы сценарий «окно закрывается» жил на реальном
+        # событии модели, а не на реконструкции из ряда.
+        if "WINDOW_CLOSING" not in set(push_events["scenario"].astype(str)):
+            w1_raw = raw_cal[raw_cal["scenario"].astype(str) == "WINDOW_CLOSING"]
+            if len(w1_raw):
+                w1_ev = apply_meta_model(w1_raw)  # confidence_filter по умолчанию
+                if "evidence_count" not in w1_ev.columns and "evidence" in w1_ev.columns:
+                    w1_ev["evidence_count"] = w1_ev["evidence"].apply(len)
+                w1_push = apply_signal_policy(
+                    w1_ev, SignalPolicyConfig(cooldown_days=3, max_signals_per_7d=2))
+                if len(w1_push):
+                    w1_push = w1_push.assign(meta_model="confidence_filter_w1_supplement")
+                    push_events = pd.concat([push_events, w1_push], ignore_index=True)
+                    log(f"добор WINDOW_CLOSING confidence-filter: +{len(w1_push)} событий")
+
         A.save_parquet(push_events, "push_events.parquet")
         try:
             from src.meta_model import market_event_records
@@ -256,15 +274,17 @@ def _rate_on(rates: pd.DataFrame, corridor: str, d: pd.Timestamp) -> float | Non
 
 
 def _reversal_up_date(scoring: pd.DataFrame, corridor: str):
-    """Недавняя дата, где курс {n>=2} дней растёт после локального минимума —
-    для S3 «окно закрывается», когда модель не дала WINDOW_CLOSING."""
+    """Недавняя дата, где курс 2+ дня подряд растёт И вырос за 3 дня в плюс —
+    для сценария S3 «окно закрывается», чтобы текст «N дней растёт, +X б.п.»
+    не противоречил фактам."""
     cur = corridor.replace("RUB_", "")
     sub = scoring.loc[scoring["currency"] == cur].sort_values("available_at")
     if "consecutive_up" not in sub.columns:
         return None
-    m = sub.loc[(sub["consecutive_up"] >= 2)
-                & (pd.to_datetime(sub["available_at"])
-                   <= pd.to_datetime(sub["available_at"]).max() - pd.Timedelta(days=20))]
+    cutoff = pd.to_datetime(sub["available_at"]).max() - pd.Timedelta(days=20)
+    r3 = sub["return_3d_bps"] if "return_3d_bps" in sub.columns else 1.0
+    m = sub.loc[(sub["consecutive_up"] >= 2) & (r3 > 0)
+                & (pd.to_datetime(sub["available_at"]) <= cutoff)]
     return pd.Timestamp(m["available_at"].max()) if len(m) else None
 
 
@@ -344,31 +364,38 @@ def _rewrite_scenarios(push_events: pd.DataFrame, raw: pd.DataFrame,
         want = {"S1": "GOOD_NOW", "S3": "WINDOW_CLOSING", "S4": "GOOD_NOW"}.get(sid)
         if want is None:
             continue
-        # для S3 (окно закрывается) тип не подменяем на GOOD_NOW: если модель не
-        # выдала в пуш ни одного WINDOW_CLOSING — собираем S3 из самого ряда
-        # (курс {n} дней растёт после локального минимума), это «вариант текста».
-        d = pick(corr, want) if sid == "S3" else (pick(corr, want) or pick(corr, None))
-        if d is None and sid == "S3":
+        # S3 «окно закрывается» — сценарный, поэтому берём дату с реальным ростом
+        # курса 2+ дня подряд (иначе текст «N дней растёт» противоречит фактам).
+        # В общий поток push_events реальные WINDOW_CLOSING всё равно добраны выше.
+        if sid == "S3":
             d = _reversal_up_date(scoring, corr)
-            if d is not None:
-                r = _rate_on(rates, corr, d)
-                fr = _feature_row(scoring, corr, d)
-                sc["as_of_date"] = pd.Timestamp(d).date().isoformat()
-                sc["push_rate"] = round(float(r), 6)
-                sc["scenario_code"] = "REVERSAL_UP"
-                # сид-сигнал: push-model отдаст его в /signals, чтобы плашка
-                # показала REVERSAL_UP. Помечен seed=true (реконструкция из ряда).
-                seeds.append({
-                    "date": sc["as_of_date"], "corridor": corr,
-                    "indicator": "reversal_from_series", "direction": "closing",
-                    "speed": "slow", "strength": 0.5, "scenario_code": "REVERSAL_UP",
-                    "facts": C.facts_from_feature_row(fr, float(r), window_days=30),
-                    "seed": True,
-                })
-                changed.append(f"{sid}:{sc['as_of_date']} REVERSAL_UP (сид из ряда, модель не выдала WINDOW_CLOSING)")
-            else:
-                changed.append(f"{sid}:оставлен как есть (нет подходящего разворота)")
+            if d is None:
+                changed.append(f"{sid}:оставлен как есть (нет подходящего разворота в ряду)")
+                continue
+            r = _rate_on(rates, corr, d)
+            fr = _feature_row(scoring, corr, d)
+            sc["as_of_date"] = pd.Timestamp(d).date().isoformat()
+            sc["push_rate"] = round(float(r), 6)
+            sc["scenario_code"] = "REVERSAL_UP"
+            facts = C.facts_from_feature_row(fr, float(r), window_days=30)
+            try:  # для «растёт» показываем именно рост за 3 дня (он > 0 по отбору)
+                r3 = float(fr.get("return_3d_bps"))
+                if r3 == r3:
+                    facts["change_bp"] = int(round(r3))
+            except (TypeError, ValueError):
+                pass
+            seeds.append({
+                "date": sc["as_of_date"], "corridor": corr,
+                "indicator": "reversal_up", "direction": "closing",
+                "speed": "slow", "strength": 0.55, "scenario_code": "REVERSAL_UP",
+                "facts": facts,
+                "seed": True,
+            })
+            has_real = "WINDOW_CLOSING" in set(pe.loc[pe["corridor"] == corr, "scenario"].astype(str))
+            changed.append(f"{sid}:{sc['as_of_date']} REVERSAL_UP"
+                           + ("" if has_real else " (в потоке нет реального WINDOW_CLOSING)"))
             continue
+        d = pick(corr, want) or pick(corr, None)
         if d is None:
             continue
         r = _rate_on(rates, corr, d)
