@@ -125,8 +125,42 @@ GET /signals?as_of=2026-06-15&corridors=RUB_TJS,RUB_UZS
 
 Правила: модель отдаёт **факты и `scenario_code`**, не текст, не рекомендацию,
 не вероятность. `scenario_code` ∈ `MOMENTUM_DOWN, LEVEL_LOW, REVERSAL_UP,
-SEASONAL, NEUTRAL`. Ответ на `as_of=T` не зависит от данных после T (проверяется
-двумя вызовами на пересекающихся датах).
+SEASONAL, NEUTRAL, ML_MOMENT`. Ответ на `as_of=T` не зависит от данных после T
+(проверяется двумя вызовами на пересекающихся датах).
+
+---
+
+## Рабочие ML-сервисы (`ml/`)
+
+Три контейнера, поднятых из настоящего кода ML-команды (git submodule
+`ml/upstream` → `AI_Product_Hack_trigger_model`, зафиксирован, **не
+модифицируется**):
+
+| Сервис | Что делает | Эндпоинты |
+|---|---|---|
+| **parser** | Парсер котировок валютных пар ЦБ РФ (`src/cbr_loader.py`) | `/health`, `/pairs`, `/rates?corridor=`, `/rates/wide` |
+| **moment-model** | ML-модель выгодного момента: 100 rule+ML движков `GOOD_NOW`/`WINDOW_CLOSING` × горизонты 1/3/5/10/20 × 5 валют, walk-forward с переобучением | `/health`, `/registry`, `/engine-signals?as_of=` |
+| **push-model** | ML-модель «какой сигнал в пуш»: логистическая метамодель + частотная политика (cooldown 3 дн., ≤2 / 7 дн.). Реализует контракт стенда выше | `/health`, `/signals?as_of=`, `/push-events`, `/decisions?as_of=` |
+
+Плюс одноразовый `ml-warmup` — прогоняет полный production-конвейер
+(`ml/upstream/notebooks/prod_pipline.ipynb`), кэширует артефакты в docker-том
+`ml_data`, переписывает `data/rates.csv` реальными курсами ЦБ и `data/scenarios.json`
+/ `data/signals.json` на реальные срабатывания модели (синтетику → `data/*.synthetic.*`).
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.yml -f docker-compose.ml.yml --profile ml up --build
+```
+
+Первый старт: `ml-warmup` считает **~11–15 мин** (полный walk-forward replay с
+2020). Дальше — мгновенно (артефакты в томе). Ускорить: `ML_REPLAY_FROM=2024-01-01`.
+
+Стенд при этом берёт курсы у `parser`, сигналы у `push-model`, сырой поток
+движков у `moment-model`; при недоступности любого — молчаливый откат на
+`data/*`, факт отката виден в `/api/health` (`signals_source`, `rates_source`,
+`ml_services`). В UI: режим **Данные** → блок «ML-конвейер».
+
+Подробности — `ml/README.md`.
 
 ---
 

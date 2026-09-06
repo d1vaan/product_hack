@@ -5,3 +5,12 @@ __pycache__/
 web/node_modules/
 web/dist/
 .DS_Store
+
+# ML: локальный кэш прогрева (том mldata живёт в docker volume, но на всякий случай)
+mldata/
+ml/**/__pycache__/
+# синтетические бэкапы, которые пишет ml-warmup
+data/rates.synthetic.csv
+data/signals.synthetic.json
+data/scenarios.synthetic.json
+data/signals.ml.json

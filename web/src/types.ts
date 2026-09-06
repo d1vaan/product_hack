@@ -129,10 +129,23 @@ export interface StandEvent {
   known_type: boolean;
 }
 
+export interface MlServiceProbe {
+  configured: boolean;
+  reachable?: boolean;
+  error?: string;
+  health?: Record<string, unknown>;
+}
+
 export interface Health {
   status: string;
   version: string;
   signals_source: { active: string; model_version: string | null; fell_back?: boolean; error?: string };
+  rates_source?: { active: string; error?: string | null };
+  ml_services?: {
+    parser: MlServiceProbe;
+    moment_model: MlServiceProbe;
+    push_model: MlServiceProbe;
+  };
   dates_available: { from: string; to: string };
   features: { reserve: boolean; recipient_limit: boolean };
   params: Record<string, number>;

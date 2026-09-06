@@ -7,11 +7,40 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+import httpx
+
 from . import config, evaluate as ev, policy, reserve as rsv, signals as sig
 from . import texts as texts_mod
 from .data_access import (CORRIDORS, corridor_series, date_range, personas,
-                          scenarios, rate_on)
+                          rates_source, scenarios, rate_on)
 from .events import log_event, recent
+
+
+def _ml_probe(url: str) -> dict:
+    """Быстрый health любого ML-сервиса. Никогда не бросает."""
+    if not url:
+        return {"configured": False}
+    try:
+        with httpx.Client(timeout=config.ML_TIMEOUT_S) as c:
+            r = c.get(url.rstrip("/") + "/health")
+            r.raise_for_status()
+            return {"configured": True, "reachable": True, "health": r.json()}
+    except Exception as e:  # noqa: BLE001
+        return {"configured": True, "reachable": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def _ml_get(url: str, path: str, params: dict):
+    if not url:
+        raise HTTPException(503, "ML-сервис не сконфигурирован")
+    try:
+        with httpx.Client(timeout=config.ML_TIMEOUT_S * 4) as c:
+            r = c.get(url.rstrip("/") + path, params={k: v for k, v in params.items() if v is not None})
+            r.raise_for_status()
+            return r.json()
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"ML-сервис недоступен: {type(e).__name__}: {e}")
 
 app = FastAPI(title="FX-trigger demo stand", version=config.VERSION)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"],
@@ -37,6 +66,12 @@ def health():
         "status": "ok",
         "version": config.VERSION,
         "signals_source": src,
+        "rates_source": rates_source(),
+        "ml_services": {
+            "parser": _ml_probe(config.RATES_URL),
+            "moment_model": _ml_probe(config.MOMENT_URL),
+            "push_model": _ml_probe(config.ML_URL),
+        },
         "dates_available": {"from": lo, "to": hi},
         "features": {
             "reserve": config.FEATURE_RESERVE,
@@ -80,6 +115,30 @@ def rates(corridor: str = Query(...), from_: str | None = Query(None, alias="fro
 def signals(as_of: str = Query(...), corridor: str | None = Query(None)):
     corr = [corridor] if corridor else None
     return sig.get_signals(as_of, corr)
+
+
+# --- проксирование к ML-сервисам (для экрана «Данные» / режима разбора) ---
+@app.get("/api/ml/engine-signals")
+def ml_engine_signals(as_of: str = Query(...), corridor: str | None = Query(None)):
+    """Сырой поток движков «выгодного момента» (moment-model)."""
+    return _ml_get(config.MOMENT_URL, "/engine-signals",
+                   {"as_of": as_of, "corridor": corridor})
+
+
+@app.get("/api/ml/registry")
+def ml_registry():
+    return _ml_get(config.MOMENT_URL, "/registry", {})
+
+
+@app.get("/api/ml/push-events")
+def ml_push_events(as_of: str | None = Query(None), corridor: str | None = Query(None)):
+    return _ml_get(config.ML_URL, "/push-events", {"as_of": as_of, "corridor": corridor})
+
+
+@app.get("/api/ml/decisions")
+def ml_decisions(as_of: str = Query(...), corridor: str | None = Query(None)):
+    """Что сработало у движков и что прошло метамодель + частотную политику."""
+    return _ml_get(config.ML_URL, "/decisions", {"as_of": as_of, "corridor": corridor})
 
 
 @app.get("/api/personas")

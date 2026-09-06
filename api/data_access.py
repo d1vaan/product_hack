@@ -40,8 +40,46 @@ def _path(name: str) -> str:
     return os.path.abspath(os.path.join(config.DATA_DIR, name))
 
 
+_rates_source = {"active": "file", "error": None}
+
+
+def rates_source() -> dict:
+    return dict(_rates_source)
+
+
+def _rates_from_parser() -> pd.DataFrame:
+    """Тянет широкий ряд у парсера котировок (RATES_URL) и приводит к формату
+    data/rates.csv: columns date, corridor, rate, is_stale."""
+    import httpx
+
+    with httpx.Client(timeout=config.ML_TIMEOUT_S * 3) as c:
+        r = c.get(config.RATES_URL.rstrip("/") + "/rates/wide")
+        r.raise_for_status()
+        payload = r.json()
+    cols = [x for x in payload.get("columns", []) if x in {"AMD", "KZT", "KGS", "TJS", "UZS"}]
+    recs = []
+    for row in payload.get("rows", []):
+        for cur in cols:
+            if row.get(cur) is None:
+                continue
+            recs.append({"date": row["date"], "corridor": f"RUB_{cur}",
+                         "rate": float(row[cur]), "is_stale": False})
+    df = pd.DataFrame(recs)
+    if df.empty:
+        raise ValueError("парсер вернул пустой ряд")
+    df["date"] = pd.to_datetime(df["date"]).dt.date
+    return df.sort_values(["corridor", "date"]).reset_index(drop=True)
+
+
 @lru_cache(maxsize=1)
 def rates() -> pd.DataFrame:
+    if config.RATES_URL:
+        try:
+            df = _rates_from_parser()
+            _rates_source.update(active="parser", error=None)
+            return df
+        except Exception as e:  # noqa: BLE001 — откат на файл
+            _rates_source.update(active="file", error=f"{type(e).__name__}: {e}")
     df = pd.read_csv(_path("rates.csv"), dtype={"corridor": str})
     df["date"] = pd.to_datetime(df["date"]).dt.date
     df["rate"] = df["rate"].astype(float)

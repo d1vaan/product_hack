@@ -42,16 +42,10 @@ services:
       - ./data:/data:ro
       - ./logs:/logs
 
-  # Опциональный контейнер модели. Поднимается профилем with-ml.
-  # Стенд полностью работает и без него (сигналы из data/signals.json).
-  ml:
-    profiles: ["with-ml"]
-    build: ./ml
-    restart: unless-stopped
-    expose:
-      - "8000"
-    volumes:
-      - ./data:/data:ro
+  # Рабочие ML-сервисы (парсер котировок, модель выгодного момента, модель
+  # «какой сигнал в пуш») живут в оверлее docker-compose.ml.yml:
+  #   docker compose -f docker-compose.yml -f docker-compose.ml.yml --profile ml up --build
+  # Без оверлея стенд работает автономно на data/signals.json.
 
 volumes:
   caddy_data:
