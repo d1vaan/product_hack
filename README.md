@@ -33,7 +33,6 @@ demo-stand/
 ├── docker-compose.ml.yml         оверлей: parser + moment-model + push-model + ml-warmup (профиль ml)
 ├── Caddyfile                     reverse-proxy :80/:443, здесь же меняется домен для TLS
 ├── .env.example                  все параметры стенда с дефолтами → cp .env.example .env
-├── .gitmodules                   ml/upstream → репозиторий ML-команды (зафиксирован)
 │
 ├── api/                          бэкенд (FastAPI, без БД)
 │   ├── main.py                   приложение, ~22 ручки /api/*, /api/health, passthrough /api/ml/*
@@ -65,7 +64,7 @@ demo-stand/
 │   └── Dockerfile                multi-stage: сборка Vite → раздача nginx
 │
 ├── ml/                          рабочие ML-сервисы (см. ml/README.md)
-│   ├── upstream/                 git submodule → AI_Product_Hack_trigger_model (НЕ модифицируется)
+│   ├── upstream/                 вендорённый снимок кода ML-команды (src/ + tests/, коммит 1898dee, НЕ модифицируется)
 │   ├── common/                   тонкие обёртки: pipeline.py · contract.py · artifacts.py
 │   ├── parser/ moment_model/ push_model/    FastAPI-сервисы (app.py + Dockerfile)
 │   ├── warmup/run_warmup.py      одноразовый прогон конвейера → том ml_data
@@ -324,7 +323,7 @@ ML-команды — `ml/upstream/tests`, см. [`tests/README.md`](tests/READM
 2. Docker (если нет): `curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER && newgrp docker`
 3. Запуск:
    ```bash
-   git clone --recurse-submodules <repo> stand && cd stand
+   git clone <repo> stand && cd stand
    cp .env.example .env
    docker compose up -d --build            # или с оверлеем -f docker-compose.ml.yml --profile ml
    ```

@@ -1,4 +1,5 @@
-# Оверлей: рабочие ML-сервисы из ml/upstream (git submodule) + подключение к стенду.
+# Оверлей: рабочие ML-сервисы из ml/upstream (вендорённый снимок кода ML-команды)
+# + подключение к стенду.
 #
 #   docker compose -f docker-compose.yml -f docker-compose.ml.yml --profile ml up --build
 #

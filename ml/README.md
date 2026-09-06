@@ -1,9 +1,10 @@
 # ML-сервисы демо-стенда
 
 Три рабочих контейнера, поднятых из кода ML-команды
-(`ml/upstream` — git submodule на репозиторий
-[AI_Product_Hack_trigger_model](https://github.com/YYukh/AI_Product_Hack_trigger_model),
-зафиксирован на коммит `1898dee`, **не модифицируется**).
+([AI_Product_Hack_trigger_model](https://github.com/YYukh/AI_Product_Hack_trigger_model)).
+`ml/upstream/` — вендорённый снимок этого кода (`src/` + `tests/`), коммит
+`1898dee`; лежит обычными файлами, **не модифицируется**. Обновление — заменой
+содержимого `ml/upstream/` на новый снимок.
 
 | Контейнер | Что демонстрирует | Код upstream |
 |---|---|---|
@@ -11,8 +12,9 @@
 | **moment-model** | ML-модель выявления выгодного момента: rule + ML движки `GOOD_NOW` / `WINDOW_CLOSING` × горизонты 1/3/5/10/20 × 5 валют | `src/production_pipeline.py`, `src/production_config.py`, `src/indicators.py`, `src/ml_backtest.py` |
 | **push-model** | ML-модель «какой сигнал пойдёт в пуш»: сменяемая метамодель + частотная политика (cooldown 3 дн., ≤2 сигнала за 7 дн.) | `src/meta_model.py`, `src/signal_contract.py`, `src/signal_policy.py`, `src/production_pipeline.py:filter_signal` |
 
-Плюс одноразовый **ml-warmup** — прогоняет полный production-конвейер из
-`ml/upstream/notebooks/prod_pipline.ipynb` и кладёт артефакты в общий том `mldata`.
+Плюс одноразовый **ml-warmup** — повторяет production-конвейер ML-команды
+(курсы ЦБ → признаки → walk-forward replay движков → метамодель → частотная
+политика) и кладёт артефакты в общий том `mldata`.
 
 ## Запуск
 

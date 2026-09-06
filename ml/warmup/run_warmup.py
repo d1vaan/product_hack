@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ml-warmup — одноразовый прогрев ML-конвейера.
 
-Повторяет production-цепочку из ml/upstream/notebooks/prod_pipline.ipynb:
+Повторяет production-цепочку ML-команды (ml/upstream/src):
     курсы ЦБ → panel/features/targets → replay движков (walk-forward с
     переобучением) → метамодель «какой сигнал в пуш» → частотная политика.
 
