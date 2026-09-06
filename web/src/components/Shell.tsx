@@ -1,46 +1,5 @@
 import type { ReactNode } from "react";
 
-// Полоса стенда — единственная «не-банковская» хромировка. Живёт над телефоном
-// и позволяет вернуться к списку сценариев, проиграть заново, промотать день.
-export function StandBar({
-  title,
-  onBack,
-  onReplay,
-  onPlusDay,
-}: {
-  title: string;
-  onBack: () => void;
-  onReplay: () => void;
-  onPlusDay?: () => void;
-}) {
-  return (
-    <div className="mx-auto flex w-full max-w-[393px] items-center gap-2 px-1 pb-2 text-[13px] text-white/70">
-      <button
-        onClick={onBack}
-        className="rounded-full bg-white/10 px-3 py-1 font-medium text-white/85 transition active:scale-95"
-      >
-        ‹ Сценарии
-      </button>
-      <span className="min-w-0 flex-1 truncate text-center">{title}</span>
-      {onPlusDay && (
-        <button
-          onClick={onPlusDay}
-          className="shrink-0 rounded-full bg-white/10 px-3 py-1 font-medium text-white/85 transition active:scale-95"
-        >
-          +1 день
-        </button>
-      )}
-      <button
-        onClick={onReplay}
-        aria-label="Проиграть заново"
-        className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 font-medium text-white/85 transition active:scale-95"
-      >
-        ↻
-      </button>
-    </div>
-  );
-}
-
 // Рамка телефона: на десктопе — устройство по центру, на узком экране — во весь
 // вьюпорт без бортика. Внутри — статус-бар, прокручиваемый контент, home-бар.
 export function PhoneFrame({

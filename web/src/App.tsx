@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { readUrl, writeUrl, sessionId } from "./store";
+import type { Entry, Tab } from "./store";
 import type {
   Corridor,
   Evaluation,
@@ -9,7 +10,8 @@ import type {
   ReserveView,
   Scenario,
 } from "./types";
-import { PhoneFrame, StandBar } from "./components/Shell";
+import { PhoneFrame } from "./components/Shell";
+import { TopTabs, SandboxBar, ScenarioBar } from "./components/Chrome";
 import { BackButton } from "./components/ui";
 import { PushToast } from "./components/PushToast";
 import { Launcher } from "./Launcher";
@@ -28,6 +30,7 @@ import { RecipientLimitWarning } from "./screens/RecipientLimit";
 // Механика подачи DRIFT и порог — фиксированы (пульт стенда убран).
 const MECHANIC = "C";
 const DRIFT_THR = 20;
+const DEFAULT_CORRIDOR = "RUB_TJS";
 
 type Screen =
   | "push"
@@ -57,45 +60,97 @@ function nextTradingDay(iso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+function prevTradingDay(iso: string): string {
+  const d = new Date(iso + "T00:00:00Z");
+  do {
+    d.setUTCDate(d.getUTCDate() - 1);
+  } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
+
+function shiftIso(iso: string, days: number): string {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+const clampDate = (iso: string, lo: string, hi: string) =>
+  iso < lo ? lo : iso > hi ? hi : iso;
+
 export default function App() {
   const url0 = useMemo(() => readUrl(), []);
   const sid = useMemo(() => sessionId(), []);
 
-  const [phase, setPhase] = useState<"launcher" | "flow">(
-    url0.scenario ? "flow" : "launcher"
-  );
+  const [tab, setTab] = useState<Tab>(url0.tab);
   const [corridors, setCorridors] = useState<Corridor[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
 
+  // --- вкладка «Сценарии»
   const [scenarioId, setScenarioId] = useState<string>(url0.scenario || "");
-  const [simDate, setSimDate] = useState<string>("");
+
+  // --- вкладка «Песочница»
+  const [sbCorridor, setSbCorridor] = useState<string>(url0.corridor || "");
+  const [sbEntry, setSbEntry] = useState<Entry>(url0.entry || "SELF");
+  const [sbPushDaysAgo, setSbPushDaysAgo] = useState<number>(4);
+  const [sbPushRate, setSbPushRate] = useState<number | null>(null);
+  const [sbPushDate, setSbPushDate] = useState<string | null>(null);
+
+  // --- общий поток
+  const [simDate, setSimDate] = useState<string>(url0.date || "");
   const [screen, setScreen] = useState<Screen>("home");
   const [ev, setEv] = useState<Evaluation | null>(null);
   const [pushEval, setPushEval] = useState<Evaluation | null>(null);
   const [amountRub, setAmountRub] = useState<number>(0);
-  const [openDelay, setOpenDelay] = useState<number>(360);
   const [reserve, setReserve] = useState<ReserveView | null>(null);
   const [limitCheck, setLimitCheck] = useState<any | null>(null);
+
+  const dateMin = health?.dates_available.from || "2020-01-02";
+  const dateMax = health?.dates_available.to || "2026-09-06";
+
+  const inScenario = tab === "scenarios" && !!scenarioId;
 
   const activeScenario = useMemo(
     () => scenarios.find((s) => s.id === scenarioId) || null,
     [scenarios, scenarioId]
   );
-  const persona = useMemo(
-    () => personas.find((p) => p.id === activeScenario?.persona) || personas[0] || null,
-    [personas, activeScenario]
-  );
+
+  const corridorCode = inScenario
+    ? activeScenario?.corridor || sbCorridor
+    : sbCorridor;
+
   const corridor = useMemo(
     () =>
-      corridors.find((c) => c.corridor === activeScenario?.corridor) ||
-      corridors[0] ||
-      null,
-    [corridors, activeScenario]
+      corridors.find((c) => c.corridor === corridorCode) || corridors[0] || null,
+    [corridors, corridorCode]
   );
 
-  // --- начальная загрузка -----------------------------------------------
+  const persona = useMemo<Persona | null>(() => {
+    if (inScenario)
+      return personas.find((p) => p.id === activeScenario?.persona) || personas[0] || null;
+    const p = personas.find((x) => x.corridor === corridorCode);
+    if (p) return p;
+    if (!corridor) return null;
+    return {
+      id: "sandbox",
+      name: "Гость",
+      corridor: corridorCode,
+      city: "",
+      timezone: "",
+      typical_amount_rub: 20000,
+      recipient_name: "",
+      recipient_phone: "",
+      recipient_bank: corridor.country,
+      open_delay_min: 0,
+      rate_sensitivity: "mid",
+      recipient_limit: null,
+      note: "",
+      assumption: "",
+    } as Persona;
+  }, [inScenario, personas, activeScenario, corridorCode, corridor]);
+
+  // --- начальная загрузка --------------------------------------------
   useEffect(() => {
     Promise.all([api.corridors(), api.personas(), api.scenarios(), api.health()])
       .then(([c, p, s, h]) => {
@@ -107,31 +162,111 @@ export default function App() {
       .catch((e) => console.error("bootstrap failed", e));
   }, []);
 
-  // --- запрос к /evaluate ---------------------------------------------
+  // дефолты песочницы, когда пришли данные
+  useEffect(() => {
+    if (!corridors.length || !health) return;
+    setSbCorridor((prev) =>
+      prev && corridors.some((c) => c.corridor === prev) ? prev : DEFAULT_CORRIDOR
+    );
+    setSimDate((prev) => prev || health.dates_available.to);
+  }, [corridors, health]);
+
+  // --- запрос к /evaluate -------------------------------------------
   const evalBody = useCallback(
-    (entry: "PUSH" | "SELF", date: string, atMinutes?: number) => {
-      const sc = activeScenario!;
-      const pushMin = sc.push_sent_at ? hhmm(sc.push_sent_at) : null;
-      const simMinutes =
-        atMinutes ??
-        (entry === "PUSH" && pushMin != null ? pushMin + openDelay : 12 * 60);
+    (
+      entry: Entry,
+      date: string,
+      opts?: { corridor?: string; pushRate?: number | null }
+    ) => {
+      const corr = opts?.corridor ?? corridorCode;
+      if (inScenario && activeScenario) {
+        const sc = activeScenario;
+        const pushMin = sc.push_sent_at ? hhmm(sc.push_sent_at) : null;
+        const simMinutes =
+          entry === "PUSH" && pushMin != null
+            ? pushMin + (sc.open_delay_min || 0)
+            : 12 * 60;
+        return {
+          corridor: sc.corridor,
+          sim_date: date,
+          sim_minutes: simMinutes,
+          entry,
+          push_sent_at_minutes: entry === "PUSH" ? pushMin : null,
+          push_rate: entry === "PUSH" ? sc.push_rate : null,
+          amount_rub:
+            amountRub ||
+            sc.amount_rub_override ||
+            persona?.typical_amount_rub ||
+            20000,
+          drift_mechanic: MECHANIC,
+          drift_threshold_bp: DRIFT_THR,
+          session_id: sid,
+        };
+      }
+      // песочница
+      const pr = opts?.pushRate !== undefined ? opts.pushRate : sbPushRate;
       return {
-        corridor: sc.corridor,
+        corridor: corr,
         sim_date: date,
-        sim_minutes: simMinutes,
+        sim_minutes: 12 * 60,
         entry,
-        push_sent_at_minutes: entry === "PUSH" ? pushMin : null,
-        push_rate: entry === "PUSH" ? sc.push_rate : null,
+        push_sent_at_minutes: entry === "PUSH" ? 9 * 60 : null,
+        push_rate: entry === "PUSH" ? pr : null,
         amount_rub: amountRub || persona?.typical_amount_rub || 20000,
         drift_mechanic: MECHANIC,
         drift_threshold_bp: DRIFT_THR,
         session_id: sid,
       };
     },
-    [activeScenario, openDelay, amountRub, persona, sid]
+    [inScenario, activeScenario, corridorCode, sbPushRate, amountRub, persona, sid]
   );
 
-  // --- проиграть сценарий с начала ----------------------------------
+  // --- песочница: курс «в пуше» = курс за N торговых дней до даты ----
+  useEffect(() => {
+    if (inScenario || sbEntry !== "PUSH" || !corridorCode || !simDate) return;
+    let dead = false;
+    api
+      .rates(corridorCode, shiftIso(simDate, -45), simDate)
+      .then((res) => {
+        if (dead) return;
+        const pts = res.points.filter((p) => p.date <= simDate);
+        const pt = pts[Math.max(0, pts.length - 1 - sbPushDaysAgo)];
+        setSbPushRate(pt ? pt.rate : null);
+        setSbPushDate(pt ? pt.date : null);
+      })
+      .catch(() => {
+        if (!dead) {
+          setSbPushRate(null);
+          setSbPushDate(null);
+        }
+      });
+    return () => {
+      dead = true;
+    };
+  }, [inScenario, sbEntry, corridorCode, simDate, sbPushDaysAgo]);
+
+  // --- песочница: держим стартовый экран в синхроне с параметрами ---
+  useEffect(() => {
+    if (inScenario) return;
+    if (screen !== "home" && screen !== "push") return;
+    if (sbEntry === "SELF") {
+      setPushEval(null);
+      setEv(null);
+      setScreen("home");
+      return;
+    }
+    if (sbPushRate == null) return;
+    api
+      .evaluate(evalBody("PUSH", simDate, { pushRate: sbPushRate }))
+      .then((e) => {
+        setPushEval(e);
+        setScreen("push");
+      })
+      .catch((e) => console.error(e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inScenario, sbEntry, corridorCode, simDate, sbPushRate]);
+
+  // --- проиграть сценарий с начала --------------------------------
   const play = useCallback(async () => {
     const sc = scenarios.find((s) => s.id === scenarioId);
     if (!sc) return;
@@ -139,7 +274,6 @@ export default function App() {
     setAmountRub(0);
     setLimitCheck(null);
     setSimDate(sc.as_of_date);
-    setOpenDelay(sc.open_delay_min);
 
     if (sc.entry === "PUSH" && sc.push_sent_at) {
       const body = {
@@ -188,37 +322,65 @@ export default function App() {
     }
   }, [scenarios, scenarioId, personas, sid]);
 
-  // прогон при готовности данных и при каждой смене сценария (в режиме отыгрыша)
+  // прогон при готовности данных и при каждой смене сценария
   useEffect(() => {
-    if (phase !== "flow") return;
-    if (scenarios.length && personas.length && corridors.length && scenarioId) play();
+    if (tab !== "scenarios" || !scenarioId) return;
+    if (scenarios.length && personas.length && corridors.length) play();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenarios.length, personas.length, corridors.length, scenarioId, phase]);
+  }, [scenarios.length, personas.length, corridors.length, scenarioId, tab]);
 
   // синхронизация URL
   useEffect(() => {
-    writeUrl({ scenario: phase === "flow" ? scenarioId || null : null });
-  }, [phase, scenarioId]);
+    if (tab === "scenarios") writeUrl({ tab: "scenarios", scenario: scenarioId || null });
+    else
+      writeUrl({
+        tab: "sandbox",
+        corridor: sbCorridor || null,
+        date: simDate || null,
+        entry: sbEntry,
+      });
+  }, [tab, scenarioId, sbCorridor, simDate, sbEntry]);
 
   // --- переходы ----------------------------------------------------
-  function backToLauncher() {
-    setPhase("launcher");
-    setScenarioId("");
+  function resetFlow() {
     setEv(null);
     setPushEval(null);
     setReserve(null);
+    setAmountRub(0);
+    setLimitCheck(null);
     setScreen("home");
   }
 
+  function switchTab(t: Tab) {
+    if (t === tab) return;
+    setTab(t);
+    resetFlow();
+    if (t === "sandbox") setSimDate(dateMax);
+    else setScenarioId("");
+  }
+
   function pickScenario(id: string) {
+    resetFlow();
     setScenarioId(id);
-    setPhase("flow");
+  }
+
+  function sandboxReset() {
+    setAmountRub(0);
+    setReserve(null);
+    setLimitCheck(null);
+    setEv(null);
+    setScreen("home");
   }
 
   async function openPush() {
-    if (!activeScenario) return;
     try {
-      setEv(await api.evaluate(evalBody("PUSH", simDate)));
+      setEv(
+        await api.evaluate(
+          inScenario
+            ? evalBody("PUSH", simDate)
+            : evalBody("PUSH", simDate, { pushRate: sbPushRate })
+        )
+      );
       setScreen("transfer");
     } catch (e) {
       console.error(e);
@@ -226,25 +388,23 @@ export default function App() {
   }
 
   async function goTransferFromHome() {
-    if (!activeScenario) return;
-    if (!ev) {
-      try {
-        setEv(await api.evaluate(evalBody("SELF", simDate)));
-      } catch (e) {
-        console.error(e);
-      }
+    if (!corridor) return;
+    try {
+      setEv(await api.evaluate(evalBody("SELF", simDate)));
+    } catch (e) {
+      console.error(e);
     }
     setScreen("country");
   }
 
   async function onTransfer(amount: number) {
     setAmountRub(amount);
-    if (persona?.recipient_limit && health?.features.recipient_limit && activeScenario) {
+    if (persona?.recipient_limit && health?.features.recipient_limit && corridor) {
       try {
         const chk = await api.recipientLimitCheck(
-          persona.id,
+          persona.id === "sandbox" ? "ainura" : persona.id,
           amount,
-          activeScenario.corridor,
+          corridor.corridor,
           simDate
         );
         if (chk.applies && (chk.exceeds_operation || chk.exceeds_month)) {
@@ -283,10 +443,10 @@ export default function App() {
     windowDays: number;
     fallback: boolean;
   }) {
-    if (!activeScenario) return;
+    if (!corridor) return;
     try {
       const rv = await api.createReserve({
-        corridor: activeScenario.corridor,
+        corridor: corridor.corridor,
         amount_rub: opts.amountRub,
         created_on: simDate,
         percentile: opts.percentile,
@@ -302,9 +462,20 @@ export default function App() {
     }
   }
 
+  async function shiftSandboxDay(delta: number) {
+    setSimDate((d) => {
+      const nd = clampDate(
+        delta > 0 ? nextTradingDay(d) : prevTradingDay(d),
+        dateMin,
+        dateMax
+      );
+      return nd;
+    });
+  }
+
   async function plusDay() {
     if (!simDate) return;
-    const nd = nextTradingDay(simDate);
+    const nd = clampDate(nextTradingDay(simDate), dateMin, dateMax);
     setSimDate(nd);
     if (reserve && reserve.state === "ACTIVE") {
       try {
@@ -316,7 +487,7 @@ export default function App() {
         console.error(e);
       }
     }
-    if (screen === "transfer" && activeScenario) {
+    if (screen === "transfer") {
       try {
         setEv(await api.evaluate(evalBody(ev?.entry || "SELF", nd)));
       } catch (e) {
@@ -333,7 +504,7 @@ export default function App() {
   }
 
   async function reserveTransferNow() {
-    if (!reserve || !activeScenario) return;
+    if (!reserve) return;
     await api.transferNowReserve(reserve.id, simDate, sid).catch(() => {});
     try {
       setEv(await api.evaluate(evalBody("SELF", simDate)));
@@ -344,45 +515,78 @@ export default function App() {
   }
 
   // --- рендер ----------------------------------------------------
-  if (phase === "launcher") {
-    return (
-      <div className="min-h-screen bg-[#15161A]">
-        {scenarios.length ? (
-          <Launcher scenarios={scenarios} corridors={corridors} onPick={pickScenario} />
-        ) : (
-          <div className="p-10 text-center text-white/50">Загрузка…</div>
-        )}
-      </div>
-    );
-  }
-
-  const loading = !corridor || !persona || !activeScenario;
+  const showList = tab === "scenarios" && !scenarioId;
+  const loading = !showList && (!corridor || !persona || !simDate || (inScenario && !activeScenario));
 
   return (
     <div className="flex h-[100dvh] flex-col items-center bg-[#15161A] px-0 py-0 sm:h-auto sm:min-h-screen sm:px-4 sm:py-5">
-      <div className="w-full max-w-[393px] shrink-0 pt-3 sm:pt-0">
-        <StandBar
-          title={activeScenario ? `${activeScenario.id} · ${activeScenario.title}` : "Сценарий"}
-          onBack={backToLauncher}
-          onReplay={play}
-          onPlusDay={reserve?.state === "ACTIVE" ? plusDay : undefined}
-        />
+      <div className="w-full max-w-[393px] shrink-0 space-y-2 px-3 pt-3 sm:px-0 sm:pt-0">
+        <TopTabs tab={tab} onTab={switchTab} />
+
+        {tab === "sandbox" && corridor && (
+          <SandboxBar
+            corridors={corridors}
+            corridor={corridorCode}
+            onCorridor={(c) => {
+              setSbCorridor(c);
+              sandboxReset();
+            }}
+            date={simDate || dateMax}
+            dateMin={dateMin}
+            dateMax={dateMax}
+            onShiftDay={shiftSandboxDay}
+            onToday={() => setSimDate(dateMax)}
+            entry={sbEntry}
+            onEntry={(e) => {
+              setSbEntry(e);
+              setScreen("home");
+            }}
+            pushDaysAgo={sbPushDaysAgo}
+            onPushDaysAgo={setSbPushDaysAgo}
+            pushRate={sbPushRate}
+            pushDate={sbPushDate}
+            onReset={sandboxReset}
+            onPlusDay={plusDay}
+          />
+        )}
+
+        {tab === "scenarios" && inScenario && activeScenario && (
+          <ScenarioBar
+            title={`${activeScenario.id} · ${activeScenario.title}`}
+            onList={() => setScenarioId("")}
+            onReplay={play}
+            onPlusDay={reserve?.state === "ACTIVE" ? plusDay : undefined}
+          />
+        )}
       </div>
 
-      {loading ? (
+      {showList ? (
+        <div className="w-full flex-1 overflow-y-auto sm:mt-3 sm:flex-none">
+          {scenarios.length ? (
+            <Launcher scenarios={scenarios} corridors={corridors} onPick={pickScenario} />
+          ) : (
+            <div className="p-10 text-center text-white/50">Загрузка…</div>
+          )}
+        </div>
+      ) : loading ? (
         <div className="p-10 text-center text-white/50">Загрузка…</div>
       ) : (
         <PhoneFrame>
-          {/* Пуш поверх интерфейса */}
-          {screen === "push" && pushEval && activeScenario?.push_sent_at && (
+          {screen === "push" && pushEval && (
             <PushToast
               text={pushEval.push_text || "Курс изменился"}
-              sentAtMinutes={hhmm(activeScenario.push_sent_at)}
+              sentAtMinutes={
+                inScenario && activeScenario?.push_sent_at
+                  ? hhmm(activeScenario.push_sent_at)
+                  : 9 * 60
+              }
               onOpen={openPush}
               onClose={() => setScreen("home")}
-              stacked={activeScenario.id === "S6"}
+              stacked={inScenario && activeScenario?.id === "S6"}
               onSettings={
-                activeScenario.id === "S6" ? () => setScreen("settings") : undefined
+                inScenario && activeScenario?.id === "S6"
+                  ? () => setScreen("settings")
+                  : undefined
               }
             />
           )}
@@ -393,7 +597,7 @@ export default function App() {
             </div>
           )}
 
-          {(screen === "home" || screen === "push") && (
+          {(screen === "home" || screen === "push") && persona && corridor && (
             <Home
               persona={persona}
               corridor={corridor}
@@ -403,15 +607,27 @@ export default function App() {
             />
           )}
 
-          {screen === "country" && (
+          {screen === "country" && corridor && (
             <CountryList
               corridors={corridors}
               current={corridor.corridor}
-              onPick={() => setScreen("transfer")}
+              onPick={async (c) => {
+                if (!inScenario && c !== corridorCode) {
+                  setSbCorridor(c);
+                  try {
+                    setEv(
+                      await api.evaluate(evalBody("SELF", simDate, { corridor: c }))
+                    );
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }
+                setScreen("transfer");
+              }}
             />
           )}
 
-          {screen === "transfer" && ev && (
+          {screen === "transfer" && ev && persona && corridor && (
             <TransferScreen
               ev={ev}
               persona={persona}
@@ -432,7 +648,7 @@ export default function App() {
             />
           )}
 
-          {screen === "confirm" && ev && (
+          {screen === "confirm" && ev && corridor && persona && (
             <TransferConfirm
               ev={ev}
               corridor={corridor}
@@ -443,25 +659,25 @@ export default function App() {
             />
           )}
 
-          {screen === "success" && ev && (
+          {screen === "success" && ev && corridor && persona && (
             <TransferSuccess
               ev={ev}
               corridor={corridor}
               amountRub={amountRub || persona.typical_amount_rub}
-              onDone={backToLauncher}
+              onDone={() => (inScenario ? setScenarioId("") : sandboxReset())}
             />
           )}
 
-          {screen === "settings" && (
+          {screen === "settings" && corridor && (
             <NotificationSettings
               corridors={corridors}
               activeCorridor={corridor.corridor}
-              overloaded={activeScenario.id === "S6"}
+              overloaded={inScenario && activeScenario?.id === "S6"}
               onSave={() => setScreen("home")}
             />
           )}
 
-          {screen === "reserve-setup" && (
+          {screen === "reserve-setup" && corridor && persona && (
             <ReserveSetup
               corridor={corridor}
               defaultAmount={amountRub || persona.typical_amount_rub}
@@ -469,7 +685,7 @@ export default function App() {
               onBack={() => setScreen("transfer")}
             />
           )}
-          {screen === "reserve-confirm" && reserve && (
+          {screen === "reserve-confirm" && reserve && corridor && (
             <ReserveConfirm rv={reserve} corridor={corridor} onDone={() => setScreen("home")} />
           )}
           {screen === "reserve-manage" && reserve && (
@@ -480,14 +696,18 @@ export default function App() {
               onBack={() => setScreen("home")}
             />
           )}
-          {screen === "reserve-executed" && reserve && (
-            <ReserveExecuted rv={reserve} corridor={corridor} onDone={backToLauncher} />
+          {screen === "reserve-executed" && reserve && corridor && (
+            <ReserveExecuted
+              rv={reserve}
+              corridor={corridor}
+              onDone={() => (inScenario ? setScenarioId("") : sandboxReset())}
+            />
           )}
           {screen === "reserve-expired" && reserve && (
             <ReserveExpired
               rv={reserve}
               onTransferNow={reserveTransferNow}
-              onDone={backToLauncher}
+              onDone={() => (inScenario ? setScenarioId("") : sandboxReset())}
             />
           )}
         </PhoneFrame>

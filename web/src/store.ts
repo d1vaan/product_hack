@@ -1,16 +1,43 @@
-// Состояние прогона в query-строке — теперь только выбранный сценарий.
+// Состояние прогона в query-строке.
+//   ?scenario=S2                 — вкладка «Сценарии», проигрывается S2
+//   ?corridor=RUB_TJS&date=...&entry=PUSH  — вкладка «Песочница» с параметрами
+export type Tab = "sandbox" | "scenarios";
+export type Entry = "SELF" | "PUSH";
+
 export interface UrlState {
+  tab: Tab;
   scenario: string | null;
+  corridor: string | null;
+  date: string | null;
+  entry: Entry | null;
 }
 
 export function readUrl(): UrlState {
   const p = new URLSearchParams(location.search);
-  return { scenario: p.get("scenario") };
+  const scenario = p.get("scenario");
+  const tabRaw = p.get("tab");
+  const tab: Tab =
+    tabRaw === "scenarios" || (scenario && tabRaw !== "sandbox") ? "scenarios" : "sandbox";
+  const entryRaw = p.get("entry");
+  return {
+    tab,
+    scenario,
+    corridor: p.get("corridor"),
+    date: p.get("date"),
+    entry: entryRaw === "PUSH" || entryRaw === "SELF" ? entryRaw : null,
+  };
 }
 
-export function writeUrl(s: UrlState) {
+export function writeUrl(s: Partial<UrlState>) {
   const p = new URLSearchParams();
-  if (s.scenario) p.set("scenario", s.scenario);
+  if (s.tab === "scenarios") {
+    p.set("tab", "scenarios");
+    if (s.scenario) p.set("scenario", s.scenario);
+  } else {
+    if (s.corridor) p.set("corridor", s.corridor);
+    if (s.date) p.set("date", s.date);
+    if (s.entry) p.set("entry", s.entry);
+  }
   const qs = p.toString();
   history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
 }
@@ -58,6 +85,11 @@ export function pct(bp: number): string {
 export function ddmm(iso: string): string {
   const [, m, d] = iso.split("-");
   return `${d}.${m}`;
+}
+
+export function ddmmyyyy(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}.${m}.${y}`;
 }
 
 export function minutesToHHMM(min: number): string {
